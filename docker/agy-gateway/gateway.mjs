@@ -421,13 +421,25 @@ function runTurn({ model, prompt, onDelta, signal, allowTools = false }) {
 
     let child;
     try {
-      child = spawnAgy(args, { stdio: ["ignore", "pipe", "pipe"] });
+      child = spawnAgy(args, { stdio: ["pipe", "pipe", "pipe"] });
     } catch (error) {
       resolve({ ok: false, text: "", stderr: error?.message || String(error), usage: null, result: null });
       return;
     }
 
     if (activeTurn) activeTurn.child = child;
+
+    // Send the prompt on stdin (never argv): long histories otherwise hit
+    // Linux's 128 KiB per-argument limit and spawn fails with E2BIG.
+    try {
+      child.stdin?.on("error", () => { /* turn/close handler reports the failure */ });
+      child.stdin?.write(`${JSON.stringify({ event: "user", message: { content: prompt } })}\n`);
+      child.stdin?.end();
+    } catch (error) {
+      try { child.kill("SIGKILL"); } catch { /* ignore */ }
+      resolve({ ok: false, text: "", stderr: `cannot write prompt to agy stdin: ${error?.message || error}`, usage: null, result: null });
+      return;
+    }
 
     if (process.env.AGY_DEBUG_SPAWN === "1") {
       try {
@@ -685,7 +697,13 @@ async function handleChat(req, res, body) {
               errorId: null,
             }
           : mapAgyError({ stderr: turn.stderr, result: turn.result });
-        log("warn", "turn failed", { code: mapped.code, status: mapped.status, errorId: mapped.errorId });
+        log("warn", "turn failed", {
+          code: mapped.code,
+          status: mapped.status,
+          errorId: mapped.errorId,
+          message: mapped.message,
+          stderr: String(turn.stderr || "").slice(-1000),
+        });
         if (!started) {
           sendJson(res, mapped.status, openAiErrorBody(mapped));
           return;
@@ -746,7 +764,13 @@ async function handleChat(req, res, body) {
             errorId: null,
           }
         : mapAgyError({ stderr: turn.stderr, result: turn.result });
-      log("warn", "turn failed", { code: mapped.code, status: mapped.status, errorId: mapped.errorId });
+      log("warn", "turn failed", {
+        code: mapped.code,
+        status: mapped.status,
+        errorId: mapped.errorId,
+        message: mapped.message,
+        stderr: String(turn.stderr || "").slice(-1000),
+      });
       sendJson(res, mapped.status, openAiErrorBody(mapped));
       return;
     }

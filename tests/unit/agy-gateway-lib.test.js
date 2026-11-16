@@ -49,10 +49,11 @@ describe("buildPrompt", () => {
 });
 
 describe("buildChatArgs", () => {
-  it("uses print + stream-json and never combines --mode with --disable-slash-commands", () => {
+  it("uses stream-json stdin and never puts the prompt in argv", () => {
     const args = buildChatArgs({ model: "gemini-3.8-flash-low", prompt: "hi" });
-    expect(args.slice(0, 2)).toEqual(["-p", "hi"]);
-    expect(args).toContain("--output-format");
+    expect(args.slice(0, 2)).toEqual(["--input-format", "stream-json"]);
+    expect(args).not.toContain("-p");
+    expect(args).not.toContain("hi");
     expect(args[args.indexOf("--output-format") + 1]).toBe("stream-json");
     // The CLI warns when both are set; the prompt never starts with "/", so the
     // disable flag is unnecessary.

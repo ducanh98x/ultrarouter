@@ -92,7 +92,14 @@ export function buildChatArgs({
   allowTools = false,
 } = {}) {
   if (!prompt) throw new Error("prompt is required");
-  const args = ["-p", prompt, "--output-format", "stream-json", "--print-timeout", `${printTimeoutSec}s`];
+  // Prompt travels on stdin as one stream-json user message. Passing it via
+  // `-p` breaks on long conversations (spawn E2BIG: a single argv string is
+  // capped at 128 KiB on Linux).
+  const args = [
+    "--input-format", "stream-json",
+    "--output-format", "stream-json",
+    "--print-timeout", `${printTimeoutSec}s`,
+  ];
   if (model) args.push("--model", String(model));
   if (mode) args.push("--mode", String(mode));
   // Deny every built-in tool (shell, file, web). The only allowed tool family is
