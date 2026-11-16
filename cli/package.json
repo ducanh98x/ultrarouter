@@ -11,6 +11,7 @@
     "src",
     "hooks",
     "app",
+    "docker",
     "README.md",
     "LICENSE"
   ],

@@ -2,6 +2,7 @@
 
 ## Features
 - **Antigravity CLI**: new OAuth provider that runs the official `agy` CLI in one Docker container per account, with its own `/data` login volume, proxy pool, loopback-only gateway, login relay, and Quota Tracker integration. Includes Test (real completion), Disable/Enable, Edit (name, proxy, image tag, memory, CPUs), logs, recreate/restart/delete, and 15s status polling.
+- **Antigravity CLI**: the Docker card now shows whether `ultrarouter/agy-gateway` exists and can build/rebuild it from the repo or the published CLI package, so a fresh VPS no longer needs a manual `docker build` before creating an account.
 - **Antigravity CLI**: new accounts default to **256m / 1 CPU**; account resources and image tag are editable and trigger a safe recreate that keeps the login volume. Fractional CPUs are supported.
 - **Combos**: per-member account pinning plus `keyIds` scoping (empty = public). Each member now fails over **account-first** across the same provider, then moves to the next member; accounts are chosen by fewest in-flight requests, then fewest requests today, then priority/last-used. Combo UI has an account picker and API-key multi-select; the Keys page lists assigned combos read-only.
 - **Tool calling**: MCP bridge turns `agy` MCP calls into OpenAI `tool_calls` (stream + non-stream) and seeds the client tool result on the next turn. New tools added by the client are sent per request, so no restart or re-registration is needed.

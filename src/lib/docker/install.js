@@ -7,8 +7,11 @@
  * paste into a shell.
  */
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { platform, userInfo } from "node:os";
 import { getDockerClient } from "./client.js";
+import { AGY_IMAGE, AGY_IMAGE_TAG, agyImageRef } from "./agyContainers.js";
 
 export const DOCKER_SETUP_COMMANDS = [
   "sudo apt-get update",
@@ -200,4 +203,116 @@ export async function ensureDocker({ autoInstall = false, ...deps } = {}) {
     installSteps: install.steps,
     installReason: install.reason || null,
   };
+}
+
+/**
+ * Find the agy-gateway Docker build context in the usual layouts:
+ * repo checkout, `.next/standalone` runtime, and the published CLI package.
+ */
+export function resolveAgyBuildContext() {
+  const candidates = [
+    process.env.ULTRAROUTER_DOCKER_CONTEXT,
+    process.env.ULTRAROUTER_ROOT
+      ? path.join(process.env.ULTRAROUTER_ROOT, "docker", "agy-gateway")
+      : null,
+    path.join(process.cwd(), "docker", "agy-gateway"),
+    path.join(process.cwd(), "..", "docker", "agy-gateway"),
+    path.join(process.cwd(), "..", "..", "docker", "agy-gateway"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(path.join(candidate, "Dockerfile"))) return candidate;
+    } catch {
+      // Keep looking.
+    }
+  }
+  return null;
+}
+
+function tailText(value, max = 4000) {
+  const text = String(value || "");
+  return text.length > max ? text.slice(-max) : text;
+}
+
+/**
+ * Image status for the Docker card. Never throws: a missing daemon should not
+ * break the page.
+ */
+export async function getAgyImageStatus({ tag = AGY_IMAGE_TAG, image = AGY_IMAGE, client } = {}) {
+  const ref = agyImageRef(tag, image);
+  const context = resolveAgyBuildContext();
+  const manualCommand = `docker build -t ${ref} ${context || "/opt/ultrarouter/docker/agy-gateway"}`;
+  try {
+    const dockerClient = client || getDockerClient();
+    const exists = await dockerClient.imageExists(ref);
+    return { ref, image, tag, exists, buildable: Boolean(context), context, manualCommand };
+  } catch (error) {
+    return {
+      ref,
+      image,
+      tag,
+      exists: false,
+      buildable: Boolean(context),
+      context,
+      manualCommand,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+let activeImageBuild = null;
+
+async function runAgyImageBuild({ tag, image, force, run, client }) {
+  const ref = agyImageRef(tag, image);
+  const context = resolveAgyBuildContext();
+  const manualCommand = `docker build -t ${ref} ${context || "/opt/ultrarouter/docker/agy-gateway"}`;
+
+  if (!context) {
+    return {
+      ok: false,
+      ref,
+      tag,
+      image,
+      context: null,
+      error: "Docker build context not found. Run the build on the host or set ULTRAROUTER_DOCKER_CONTEXT.",
+      manualCommand,
+    };
+  }
+
+  try {
+    const dockerClient = client || getDockerClient();
+    if (!force && (await dockerClient.imageExists(ref))) {
+      return { ok: true, skipped: true, ref, tag, image, context, manualCommand, message: "Gateway image already exists." };
+    }
+  } catch {
+    // Fall through to the build; docker build reports the real daemon error.
+  }
+
+  const startedAt = Date.now();
+  const result = await run("docker", ["build", "-t", ref, context], { timeoutMs: 30 * 60_000 });
+  return {
+    ok: result.ok,
+    ref,
+    tag,
+    image,
+    context,
+    manualCommand,
+    durationMs: Date.now() - startedAt,
+    stdout: tailText(result.stdout),
+    stderr: tailText(result.stderr),
+    error: result.ok ? null : result.timedOut ? "Docker build timed out" : tailText(result.stderr) || "Docker build failed",
+  };
+}
+
+/**
+ * Build the agy-gateway image locally. Concurrent callers share one build so a
+ * double click cannot start two Docker builds.
+ */
+export function buildAgyImage({ tag = AGY_IMAGE_TAG, image = AGY_IMAGE, force = false, run = runCommand, client } = {}) {
+  if (activeImageBuild) return activeImageBuild;
+  activeImageBuild = runAgyImageBuild({ tag, image, force, run, client }).finally(() => {
+    activeImageBuild = null;
+  });
+  return activeImageBuild;
 }

@@ -51,6 +51,7 @@ export default function AntigravityCliPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [pageError, setPageError] = useState("");
+  const [pageNotice, setPageNotice] = useState("");
   const [form, setForm] = useState({ name: "", proxyPoolId: "__none__", imageTag: "1.5.9", memory: "256m", cpus: "1" });
   const [creating, setCreating] = useState(false);
   const [edit, setEdit] = useState(null);
@@ -97,6 +98,7 @@ export default function AntigravityCliPage() {
   const setupDocker = async () => {
     setBusy("docker");
     setPageError("");
+    setPageNotice("");
     try {
       const res = await fetch("/api/docker", {
         method: "POST",
@@ -108,6 +110,34 @@ export default function AntigravityCliPage() {
       if (!json.ready) setPageError(json.error || "Docker is not ready yet");
     } catch (error) {
       setPageError(error?.message || "Docker setup failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const buildGatewayImage = async () => {
+    setBusy("build-image");
+    setPageError("");
+    setPageNotice("");
+    try {
+      const res = await fetch("/api/docker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "build-image",
+          force: Boolean(docker?.gatewayImage?.exists),
+        }),
+      });
+      const json = await res.json();
+      if (json.docker) setDocker(json.docker);
+      if (!res.ok || !json.ok) {
+        setPageError(json.error || "Gateway image build failed");
+        return;
+      }
+      setPageNotice(json.skipped ? "Gateway image already exists." : `Built ${json.ref}`);
+      await load();
+    } catch (error) {
+      setPageError(error?.message || "Gateway image build failed");
     } finally {
       setBusy(null);
     }
@@ -396,6 +426,12 @@ export default function AntigravityCliPage() {
         </div>
       )}
 
+      {pageNotice && (
+        <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+          {pageNotice}
+        </div>
+      )}
+
       <Card title="Docker" padding="sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
@@ -406,21 +442,48 @@ export default function AntigravityCliPage() {
             ) : (
               <Badge variant="error" size="sm" dot>Not installed</Badge>
             )}
+            {docker?.gatewayImage && (
+              <Badge variant={docker.gatewayImage.exists ? "success" : "warning"} size="sm" dot>
+                Image {docker.gatewayImage.exists ? "ready" : "missing"}
+              </Badge>
+            )}
             {docker?.error && <span className="text-xs">{docker.error}</span>}
           </div>
-          <Button
-            size="sm"
-            variant={docker?.ready ? "secondary" : "primary"}
-            icon="settings_suggest"
-            loading={busy === "docker"}
-            onClick={setupDocker}
-          >
-            {docker?.ready ? "Re-check Docker" : "Set up Docker"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={docker?.gatewayImage?.exists ? "secondary" : "primary"}
+              icon="build"
+              loading={busy === "build-image"}
+              disabled={!docker?.ready}
+              onClick={buildGatewayImage}
+            >
+              {docker?.gatewayImage?.exists ? "Rebuild gateway image" : "Build gateway image"}
+            </Button>
+            <Button
+              size="sm"
+              variant={docker?.ready ? "secondary" : "primary"}
+              icon="settings_suggest"
+              loading={busy === "docker"}
+              onClick={setupDocker}
+            >
+              {docker?.ready ? "Re-check Docker" : "Set up Docker"}
+            </Button>
+          </div>
         </div>
+        {docker?.gatewayImage && (
+          <p className="mt-2 text-xs text-text-muted">
+            <code className="font-mono">{docker.gatewayImage.ref}</code>
+          </p>
+        )}
         {!docker?.ready && Array.isArray(docker?.manualCommands) && (
           <pre className="mt-3 overflow-x-auto rounded-lg bg-black/[0.04] p-3 text-xs leading-relaxed dark:bg-white/[0.04]">
             {docker.manualCommands.join("\n")}
+          </pre>
+        )}
+        {docker?.ready && docker?.gatewayImage && !docker.gatewayImage.exists && !docker.gatewayImage.buildable && (
+          <pre className="mt-3 overflow-x-auto rounded-lg bg-black/[0.04] p-3 text-xs leading-relaxed dark:bg-white/[0.04]">
+            {docker.gatewayImage.manualCommand}
           </pre>
         )}
       </Card>

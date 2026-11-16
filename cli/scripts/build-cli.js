@@ -317,6 +317,19 @@ function buildCliPackage() {
     console.log("⏭️  No public folder found\n");
   }
 
+  // Step 5b: Copy the agy-gateway Docker build context so the dashboard can
+  // build the image from the published CLI package too.
+  console.log("5️⃣b Copying agy-gateway Docker context...");
+  const dockerSrc = path.join(appDir, "docker", "agy-gateway");
+  const dockerDest = path.join(cliDir, "docker", "agy-gateway");
+  if (fs.existsSync(dockerSrc)) {
+    if (fs.existsSync(dockerDest)) fs.rmSync(dockerDest, { recursive: true, force: true });
+    copyRecursive(dockerSrc, dockerDest);
+    console.log("✅ Copied agy-gateway Docker context\n");
+  } else {
+    console.log("⏭️  No agy-gateway Docker context found\n");
+  }
+
   // Step 6: Copy vendor-chunks (required for production)
   console.log("6️⃣  Copying vendor-chunks...");
   const vendorChunksSrc = path.join(appDir, ".next", "server", "vendor-chunks");
