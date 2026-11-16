@@ -120,18 +120,17 @@ describe("chat (/v1/chat/completions, /v1/messages, /v1/responses all use handle
     expect(mocks.getProviderCredentials).not.toHaveBeenCalled();
     expect(mocks.handleChatCore).not.toHaveBeenCalled();
   });
-  it("restricted-to-model-B key: B 200; the combo containing B and model A are 403", async () => {
+  it("restricted-to-model-B key: B 200; the public combo is callable; model A is 403", async () => {
     expect((await chat("openai/model-b", "sk-b")).status).toBe(200);
     vi.clearAllMocks();
-    // Bypass check: a per-member check would skip the failing model-a and serve
-    // the combo from model-b. The combo itself is not listed, so it is a 403.
-    expect((await chat("Main", "sk-b")).status).toBe(403);
+    // Main is public (keyIds empty), so any key may call it; the combo's own
+    // member fallback still applies. Direct model-a stays restricted.
+    expect((await chat("Main", "sk-b")).status).toBe(200);
     expect((await chat("openai/model-a", "sk-b")).status).toBe(403);
-    expect(mocks.handleChatCore).not.toHaveBeenCalled();
   });
-  it("empty-list key: 403 on everything", async () => {
-    for (const m of ["Main", "openai/model-a", "openai/model-b"]) expect((await chat(m, "sk-empty")).status).toBe(403);
-    expect(mocks.handleChatCore).not.toHaveBeenCalled();
+  it("empty-list key: direct models 403; public combo stays callable", async () => {
+    expect((await chat("Main", "sk-empty")).status).toBe(200);
+    for (const m of ["openai/model-a", "openai/model-b"]) expect((await chat(m, "sk-empty")).status).toBe(403);
   });
   it("restricted key on an allowed combo still fails over from an erroring member to the next", async () => {
     const r = await chat("Main", "sk-combo");
@@ -218,7 +217,7 @@ describe("/v1/models routes filter by key", () => {
     fx.keys["sk-mix"] = { id: "x", name: "mix", isActive: true, access: { restricted: true, allow: ["Main", someModel.toUpperCase()] } };
     expect(await list("sk-mix")).toEqual(["Main", someModel]);
     expect(await list("sk-combo")).toEqual(["Main"]);
-    expect(await list("sk-empty")).toEqual([]);
+    expect(await list("sk-empty")).toEqual(["Main"]);
     expect(await list(null)).toEqual(all); // no key: unchanged (middleware governs remote access)
   });
   it("/v1/models/{kind} and single-model lookup are filtered too", async () => {

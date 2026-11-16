@@ -145,6 +145,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const providerRequiresStreaming = PROVIDERS[provider]?.forceStream === true;
   let stream = providerRequiresStreaming ? true : (body.stream !== false);
 
+  // Antigravity CLI: a client that omitted `stream` expects JSON (the OpenAI
+  // default). Without this the wrapper returns JSON while the handler already
+  // chose the streaming path, yielding `text/event-stream` + a stray [DONE].
+  if (provider === "antigravity-cli" && !clientRequestedStreaming) stream = false;
+
   // Image generation models require non-streaming (Google v1internal:generateContent)
   const modelType = getModelType(alias, model);
   const isImageGenModel = modelType === "imageGen" || /image|imagen|image-generation/i.test(model);

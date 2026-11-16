@@ -8,8 +8,10 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
-import { getSettings } from "@/lib/localDb";
+import { refreshAgyQuota } from "../services/agyQuota.js";
+import { getSettings, getComboByName } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
+import { resolveProviderId } from "@/shared/constants/providers.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
@@ -28,6 +30,29 @@ import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.js";
 import { resolveSmartChoice } from "../services/systemoneRouter.js";
+
+/**
+ * Combo v2: map a model string to its member metadata (preferred account).
+ * Exact match wins; then resolve aliases so an edited model string still finds
+ * the member that was configured with the provider id.
+ */
+function buildMemberResolver(combo) {
+  const members = Array.isArray(combo?.members) ? combo.members : [];
+  const exact = new Map();
+  for (const member of members) {
+    const key = member.provider ? `${member.provider}/${member.model}` : member.model;
+    if (key && !exact.has(key)) exact.set(key, member);
+  }
+  return (modelStr) => {
+    if (exact.has(modelStr)) return exact.get(modelStr);
+    const slash = String(modelStr).indexOf("/");
+    if (slash <= 0) return null;
+    const provider = modelStr.slice(0, slash);
+    const model = modelStr.slice(slash + 1);
+    return members.find((member) => member.model === model
+      && (!member.provider || resolveProviderId(member.provider) === resolveProviderId(provider))) || null;
+  };
+}
 
 /**
  * Handle chat completion request
@@ -109,6 +134,8 @@ export async function handleChat(request, clientRawRequest = null) {
   // Check if model is a combo (has multiple models with fallback)
   const comboModels = await getComboModels(modelStr);
   if (comboModels) {
+    const comboRecord = await getComboByName(modelStr);
+    const memberFor = buildMemberResolver(comboRecord);
     // Check for combo-specific strategy first, fallback to global
     const comboStrategies = settings.comboStrategies || {};
     const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
@@ -121,18 +148,19 @@ export async function handleChat(request, clientRawRequest = null) {
       return handleFusionChat({
         body,
         models: comboModels,
-        handleSingleModel: (b, m, isPanel) => {
+        handleSingleModel: (b, m, isPanel, member) => {
           let cleanRawReq = clientRawRequest;
           if (isPanel && clientRawRequest) {
             const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
             cleanRawReq = { ...clientRawRequest, body: cleanBody };
           }
-          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+          return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, null, member);
         },
         log,
         comboName: modelStr,
         judgeModel: comboStrategies[modelStr]?.judgeModel,
         tuning: comboStrategies[modelStr]?.fusionTuning,
+        memberFor,
       });
     }
 
@@ -143,7 +171,7 @@ export async function handleChat(request, clientRawRequest = null) {
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        (b, m, member) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, member),
         adapterAdded
       ),
       log,
@@ -151,6 +179,7 @@ export async function handleChat(request, clientRawRequest = null) {
       comboStrategy,
       comboStickyLimit,
       sessionId,
+      memberFor,
       smartPolicy: comboCfg.smartPolicy || "smart",
       sessionSticky: comboCfg.sessionSticky !== false,
       confidenceThreshold: typeof comboCfg.confidenceThreshold === "number" ? comboCfg.confidenceThreshold : 0.8,
@@ -190,13 +219,15 @@ export async function handleChat(request, clientRawRequest = null) {
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null, member = null) {
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
   if (!modelInfo.provider) {
     const comboModels = await getComboModels(modelStr);
     if (comboModels) {
+      const comboRecord = await getComboByName(modelStr);
+      const memberFor = buildMemberResolver(comboRecord);
       const chatSettings = await getSettings();
       // Check for combo-specific strategy first, fallback to global
       const comboStrategies = chatSettings.comboStrategies || {};
@@ -214,18 +245,19 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         return handleFusionChat({
           body,
           models: comboModels,
-          handleSingleModel: (b, m, isPanel) => {
+          handleSingleModel: (b, m, isPanel, panelMember) => {
             let cleanRawReq = clientRawRequest;
             if (isPanel && clientRawRequest) {
               const { tools, tool_choice, ...cleanBody } = clientRawRequest.body || {};
               cleanRawReq = { ...clientRawRequest, body: cleanBody };
             }
-            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey);
+            return handleSingleModelChat(b, m, cleanRawReq, request, apiKey, null, panelMember);
           },
           log,
           comboName: modelStr,
           judgeModel: comboStrategies[modelStr]?.judgeModel,
           tuning: comboStrategies[modelStr]?.fusionTuning,
+          memberFor,
         });
       }
 
@@ -238,7 +270,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         body,
         models: augmentedModels,
         handleSingleModel: withCapacityAdapterStripping(
-          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+          (b, m, nestedMember) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, nestedMember),
           adapterAdded
         ),
         log,
@@ -246,6 +278,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         comboStrategy,
         comboStickyLimit,
         sessionId: nestedSessionId,
+        memberFor,
         smartPolicy: comboCfg.smartPolicy || "smart",
         sessionSticky: comboCfg.sessionSticky !== false,
         confidenceThreshold: typeof comboCfg.confidenceThreshold === "number" ? comboCfg.confidenceThreshold : 0.8,
@@ -277,13 +310,24 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastHeaders = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { requestedModel: requestedModel || model });
+    const pinnedConnectionId = member?.connectionId || null;
+    // Account-first failover for every member: the pinned account is preferred
+    // for the first attempt; if it fails it is excluded and the next call picks
+    // another account of the same provider (least in-flight/daily usage first).
+    // Only after every account fails does the combo advance to the next member.
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, {
+      requestedModel: requestedModel || model,
+      preferredConnectionId: pinnedConnectionId,
+    });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
+        const lockedStatus = Number(credentials.lastErrorCode);
+        const status = [401, 402, 403].includes(lockedStatus)
+          ? lockedStatus
+          : HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders);
       }
@@ -297,6 +341,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
     // Account selection shown in the unified "▶" line (acc:...)
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
+
+    // Refresh the wrapper's /usage cache in the background so the pre-filter can
+    // skip an exhausted account on the next request. Fail-open by design.
+    if (provider === "antigravity-cli") {
+      refreshAgyQuota({ ...refreshedCredentials, id: credentials.connectionId }).catch(() => {});
+    }
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
     if ((provider === "antigravity" || provider === "gemini-cli") && !refreshedCredentials.projectId) {
@@ -362,6 +412,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // Antigravity 409/429: refresh live quota to get exact resetAt before locking
     let quotaResetMs = null;
     let resetsAtMs = result.resetsAtMs;
+    if (provider === "antigravity-cli" && (result.status === 409 || result.status === 429)) {
+      await refreshAgyQuota({ ...refreshedCredentials, id: credentials.connectionId }, { force: true });
+    }
     if (provider === "antigravity" && (result.status === 409 || result.status === 429)) {
       quotaResetMs = await handleAntigravityQuotaError(
         credentials.connectionId, result.status, model,

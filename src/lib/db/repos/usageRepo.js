@@ -240,6 +240,25 @@ export async function getActiveRequests() {
   return { activeRequests, recentRequests, errorProvider };
 }
 
+export function getPendingRequestCount(connectionId) {
+  const models = pendingRequests.byAccount[connectionId];
+  if (!models) return 0;
+  return Object.values(models).reduce((sum, count) => sum + (Number(count) || 0), 0);
+}
+
+/** Today's completed request count per connection (usageDaily.byAccount). */
+export async function getDailyRequestCounts(connectionIds = []) {
+  const ids = Array.isArray(connectionIds) ? connectionIds.filter(Boolean) : [];
+  if (ids.length === 0) return {};
+  const db = await getAdapter();
+  const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [getLocalDateKey()]);
+  const day = row ? parseJson(row.data, {}) : {};
+  const byAccount = day.byAccount || {};
+  const out = {};
+  for (const id of ids) out[id] = byAccount[id]?.requests || 0;
+  return out;
+}
+
 export async function saveRequestUsage(entry) {
   try {
     const db = await getAdapter();

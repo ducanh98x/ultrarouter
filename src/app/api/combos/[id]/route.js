@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getComboById, updateCombo, deleteCombo, getComboByName } from "@/lib/localDb";
+import { validateComboReferences } from "@/lib/comboPayload";
+import { comboMembersToModels, normalizeComboKeyIds, normalizeComboMembers } from "@/shared/utils/comboMembers.js";
 import { resetComboRotation } from "open-sse/services/combo.js";
 
 // Validate combo name: only a-z, A-Z, 0-9, -, _
@@ -40,14 +42,43 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ error: "Combo name already exists" }, { status: 400 });
       }
     }
-    
-    // Capture previous name to invalidate rotation state on rename
+
     const prev = await getComboById(id);
-    const combo = await updateCombo(id, body);
-    
-    if (!combo) {
+    if (!prev) {
       return NextResponse.json({ error: "Combo not found" }, { status: 404 });
     }
+
+    const patch = { ...body };
+    if (body.members !== undefined) {
+      const normalizedMembers = normalizeComboMembers(body.members, {
+        models: body.models ?? prev.models ?? [],
+      });
+      patch.members = normalizedMembers;
+      patch.models = comboMembersToModels(normalizedMembers);
+    }
+    const effectiveMembers = patch.members !== undefined ? patch.members : prev.members || [];
+    const effectiveKeyIds = body.keyIds !== undefined
+      ? normalizeComboKeyIds(body.keyIds)
+      : prev.keyIds || [];
+    if (body.keyIds !== undefined) patch.keyIds = effectiveKeyIds;
+
+    // Validate references when members or keys actually change. A models-only
+    // patch keeps existing members (and their already-validated accounts).
+    if (body.members !== undefined || body.keyIds !== undefined) {
+      const referenceError = await validateComboReferences({
+        members: effectiveMembers,
+        keyIds: effectiveKeyIds,
+        allowMissingKeyIds: prev.keyIds || [],
+        allowMissingConnectionIds: (prev.members || [])
+          .map((member) => member.connectionId)
+          .filter(Boolean),
+      });
+      if (referenceError) {
+        return NextResponse.json({ error: referenceError }, { status: 400 });
+      }
+    }
+
+    const combo = await updateCombo(id, patch);
 
     // Invalidate rotation state (models/strategy/name may have changed)
     if (prev?.name) resetComboRotation(prev.name);

@@ -92,6 +92,7 @@ graphify-out/*
 9router-*
 
 # Local sensitive / temp files
+.openchamber/
 .engine-token.txt
 .tmp-prov.json
 .tmp-providers.json

@@ -85,6 +85,21 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const provider = normalizeProviderId(body.provider);
+
+    // Antigravity CLI connections own a Docker container; creating one through the
+    // generic API would produce a connection without a container. Point callers at
+    // the dedicated endpoint instead.
+    if (provider === "antigravity-cli" && !body.id) {
+      return NextResponse.json(
+        {
+          error:
+            "Antigravity CLI connections are provisioned as containers: POST /api/providers/antigravity-cli/containers",
+          code: "ANTIGRAVITY_CLI_USE_CONTAINER_ENDPOINT",
+        },
+        { status: 400 },
+      );
+    }
+
     const { apiKey, name, displayName, priority, globalPriority, defaultModel, testStatus } = body;
     const proxyConfig = normalizeProxyConfig(body);
     if (proxyConfig.error) {

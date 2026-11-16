@@ -1,3 +1,21 @@
+# v0.5.120 (2026-11-16)
+
+## Features
+- **Antigravity CLI**: new OAuth provider that runs the official `agy` CLI in one Docker container per account, with its own `/data` login volume, proxy pool, loopback-only gateway, login relay, and Quota Tracker integration. Includes Test (real completion), Disable/Enable, Edit (name, proxy, image tag, memory, CPUs), logs, recreate/restart/delete, and 15s status polling.
+- **Antigravity CLI**: new accounts default to **256m / 1 CPU**; account resources and image tag are editable and trigger a safe recreate that keeps the login volume. Fractional CPUs are supported.
+- **Combos**: per-member account pinning plus `keyIds` scoping (empty = public). Each member now fails over **account-first** across the same provider, then moves to the next member; accounts are chosen by fewest in-flight requests, then fewest requests today, then priority/last-used. Combo UI has an account picker and API-key multi-select; the Keys page lists assigned combos read-only.
+- **Tool calling**: MCP bridge turns `agy` MCP calls into OpenAI `tool_calls` (stream + non-stream) and seeds the client tool result on the next turn. New tools added by the client are sent per request, so no restart or re-registration is needed.
+- **Antigravity CLI logo**: added `public/providers/antigravity-cli.png` (transparent, 128×128) for provider cards and headers.
+
+## Fixes
+- **Antigravity CLI**: banned/suspended accounts are surfaced as **Suspended** with HTTP 403 and the upstream Terms message instead of a green Ready badge; the gateway now returns a real HTTP 403 before streaming when the turn fails before its first token, and the provider page polls for the change.
+- **Antigravity CLI**: a suspended account is skipped for every model and locked for 24h instead of being retried every 2 minutes; Test clears the state after a successful real completion. Recreate/update no longer flips a suspended account back to active.
+- **Combos**: a member pinned to a banned account now falls over to other accounts of the same provider even when the stored legacy `next-member` value is present. A single-member combo works as long as the provider has another healthy account; `test2` was verified returning 200 through live accounts.
+- **Combos**: all members failing on auth/permission now return the original 401/402/403 response instead of a synthesized 503/empty body, so clients see the real status.
+- **Antigravity CLI**: built-in shell/file/web tools are denied by default (`command`, `read_file`, `write_file`, `read_url`, `execute_url`, `download_url`); only the local MCP `9router` bridge is allowed. The CLI flag is auto-approval only for that bridge, and deny rules still win.
+- **Combos page**: renders interactive content after hydration to avoid browser-extension attribute injection breaking hydration; the edit modal no longer exposes the legacy `next-member` failover option.
+- **Rebrand**: the fork is now **UltraRouter** — GitHub repo `ducanh98x/ultrarouter`, npm package `ultrarouter`, CLI binary `ultrarouter` (the legacy `9router` binary and `~/.9router` data directory remain as compatibility aliases). The dashboard update check reads the `ultrarouter` npm package and offers `npm i -g ultrarouter@latest --prefer-online`.
+
 # v0.5.119 (2026-11-11)
 
 ## Features

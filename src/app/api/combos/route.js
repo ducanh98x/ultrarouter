@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCombos, createCombo, getComboByName } from "@/lib/localDb";
+import { validateComboReferences } from "@/lib/comboPayload";
+import {
+  comboMembersToModels,
+  normalizeComboKeyIds,
+  normalizeComboMembers,
+} from "@/shared/utils/comboMembers.js";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +27,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name, models, kind } = body;
+    const { name, models, members, keyIds, kind } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -38,7 +44,23 @@ export async function POST(request) {
       return NextResponse.json({ error: "Combo name already exists" }, { status: 400 });
     }
 
-    const combo = await createCombo({ name, models: models || [], kind: kind || null });
+    const normalizedMembers = normalizeComboMembers(members, { models: models || [] });
+    const normalizedKeyIds = normalizeComboKeyIds(keyIds);
+    const referenceError = await validateComboReferences({
+      members: normalizedMembers,
+      keyIds: normalizedKeyIds,
+    });
+    if (referenceError) {
+      return NextResponse.json({ error: referenceError }, { status: 400 });
+    }
+
+    const combo = await createCombo({
+      name,
+      kind: kind || null,
+      models: comboMembersToModels(normalizedMembers),
+      members: normalizedMembers,
+      keyIds: normalizedKeyIds,
+    });
 
     return NextResponse.json(combo, { status: 201 });
   } catch (error) {

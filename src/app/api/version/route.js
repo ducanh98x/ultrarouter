@@ -1,24 +1,30 @@
 import https from "https";
 import pkg from "../../../../package.json" with { type: "json" };
+import { GITHUB_CONFIG } from "@/shared/constants/config";
 
-const NPM_PACKAGE_NAME = "9router";
-const VERSION_CACHE_TTL_MS = 3600000; // cache npm latest lookup for 1h
+const NPM_PACKAGE_NAME = "ultrarouter";
+const VERSION_CACHE_TTL_MS = 5 * 60 * 1000; // cache npm lookup for 5 min
 
 // Survive hot reload; one cache per process
-const versionCache = (global.__npmVersionCache ??= { value: null, fetchedAt: 0 });
+const versionCache = (global.__ultrarouterVersionCache ??= { value: null, fetchedAt: 0 });
 
-// Fetch latest version from npm registry
+// Fetch the latest version of this fork's npm package.
 function fetchLatestVersion() {
   return new Promise((resolve) => {
     const req = https.get(
       `https://registry.npmjs.org/${NPM_PACKAGE_NAME}/latest`,
-      { timeout: 4000 },
+      { timeout: 5000, headers: { "User-Agent": "ultrarouter-update-check" } },
       (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          resolve(null);
+          return;
+        }
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           try {
-            resolve(JSON.parse(data).version || null);
+            resolve(JSON.parse(data)?.version || null);
           } catch {
             resolve(null);
           }
@@ -57,5 +63,12 @@ export async function GET() {
   const currentVersion = pkg.version;
   const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
 
-  return Response.json({ currentVersion, latestVersion, hasUpdate });
+  return Response.json({
+    currentVersion,
+    latestVersion,
+    hasUpdate,
+    source: "npm",
+    package: NPM_PACKAGE_NAME,
+    repo: GITHUB_CONFIG.repo,
+  });
 }

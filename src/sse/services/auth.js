@@ -4,6 +4,8 @@ import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLock
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache, getAntigravityModelQuota } from "./antigravityQuota.js";
+import { getAgyQuotaCache, getAgyModelQuota } from "./agyQuota.js";
+import { getDailyRequestCounts, getPendingRequestCount } from "@/lib/db/repos/usageRepo.js";
 import * as log from "../utils/logger.js";
 
 // Mutex to prevent race conditions during account selection
@@ -31,6 +33,14 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     ? excludeConnectionIds
     : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
   const preferredConnectionId = options?.preferredConnectionId || null;
+  // Combo members may pin an account. With accountFallback "next-member" the
+  // member may use ONLY that account; otherwise the pinned account is preferred
+  // and the provider's normal account rotation still applies after a failure.
+  const allowedConnectionIds = options?.allowedConnectionIds
+    ? (options.allowedConnectionIds instanceof Set
+        ? options.allowedConnectionIds
+        : new Set(options.allowedConnectionIds))
+    : null;
   const requestedModel = options?.requestedModel || model;
   // Acquire mutex to prevent race conditions
   const currentMutex = selectionMutex;
@@ -72,21 +82,30 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     }
 
     const connections = await getProviderConnections({ provider: providerId, isActive: true });
-    log.debug("AUTH", `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
+    const scopedConnections = allowedConnectionIds
+      ? connections.filter((c) => allowedConnectionIds.has(c.id))
+      : connections;
+    log.debug("AUTH", `${provider} | total connections: ${scopedConnections.length}${allowedConnectionIds ? `/${connections.length} scoped` : ""}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
 
-    if (connections.length === 0) {
-      log.warn("AUTH", `No credentials for ${provider}`);
+    if (scopedConnections.length === 0) {
+      log.warn("AUTH", `No credentials for ${provider}${allowedConnectionIds ? " (after account pin scope)" : ""}`);
       return null;
     }
 
-    // Antigravity quota cache is lazy: only populated after that account returns 409/429.
+    // Antigravity CLI quota cache is lazy: only populated after that account returns 409/429.
     const isAntigravity = providerId === "antigravity";
     const antigravityQuotaCache = isAntigravity && model ? getAntigravityQuotaCache() : null;
+    const isSuspendedConnection = (c) => providerId === "antigravity-cli"
+      && (Number(c.errorCode) === 403
+        || /AGY_ACCOUNT_DISABLED|violation of terms|terms of service|banned|account.*disabled/i.test(String(c.lastError || "")));
 
     // Filter out model-locked, excluded, and Antigravity quota-exhausted connections.
-    const availableConnections = connections.filter(c => {
+    const availableConnections = scopedConnections.filter(c => {
       if (excludeSet.has(c.id)) return false;
       if (isModelLockActive(c, model)) return false;
+      // An account already known to be banned/suspended is not a candidate for
+      // any model; Test on the provider page is what brings it back.
+      if (isSuspendedConnection(c)) return false;
       const enabled = c.providerSpecificData?.enabledModels;
       if (providerId === "codex" && Array.isArray(enabled) && enabled.length && requestedModel && !enabled.includes(requestedModel)) return false;
       // Antigravity: skip if live quota exhausted for this model
@@ -99,11 +118,40 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
           return false;
         }
       }
+      // Antigravity CLI: same idea, fed by the wrapper's /v1/usage cache.
+      if (providerId === "antigravity-cli" && model) {
+        const quota = getAgyModelQuota(getAgyQuotaCache().get(c.id)?.quotas, model);
+        if (quota && quota.remainingPercentage <= 0 && quota.resetAt && new Date(quota.resetAt).getTime() > Date.now()) {
+          const account = c.id?.slice(0, 8) || "unknown";
+          log.info("AGY_QUOTA", `${account} | CACHE_BLOCK ${model} — skip until ${quota.resetAt}`);
+          return false;
+        }
+      }
       return true;
     });
 
-    log.debug("AUTH", `${provider} | available: ${availableConnections.length}/${connections.length}`);
-    connections.forEach(c => {
+    log.debug("AUTH", `${provider} | available: ${availableConnections.length}/${scopedConnections.length}`);
+    // Antigravity CLI accounts are interchangeable for the same model. Keep
+    // the account with the fewest in-flight requests first, then the fewest
+    // completed requests today, before priority/last-used. This applies after
+    // the pinned account was excluded by a failure, so failover walks up from
+    // the least-used account instead of always hitting the same one.
+    if (providerId === "antigravity-cli" && availableConnections.length > 1) {
+      const dailyCounts = await getDailyRequestCounts(availableConnections.map((c) => c.id));
+      availableConnections.sort((a, b) => {
+        const pendingA = getPendingRequestCount(a.id);
+        const pendingB = getPendingRequestCount(b.id);
+        if (pendingA !== pendingB) return pendingA - pendingB;
+        const dailyA = dailyCounts[a.id] || 0;
+        const dailyB = dailyCounts[b.id] || 0;
+        if (dailyA !== dailyB) return dailyA - dailyB;
+        const priorityA = a.priority ?? 999;
+        const priorityB = b.priority ?? 999;
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        return new Date(a.lastUsedAt || 0) - new Date(b.lastUsedAt || 0);
+      });
+    }
+    scopedConnections.forEach(c => {
       const excluded = excludeSet.has(c.id);
       const locked = isModelLockActive(c, model);
       if (excluded || locked) {
@@ -113,11 +161,23 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     });
 
     if (availableConnections.length === 0) {
+      const suspendedConns = scopedConnections.filter(isSuspendedConnection);
+      if (suspendedConns.length > 0 && suspendedConns.length === scopedConnections.length) {
+        const first = suspendedConns[0];
+        log.warn("AUTH", `${provider} | all ${suspendedConns.length} accounts suspended | lastError=${String(first.lastError || "").slice(0, 60)}`);
+        return {
+          allRateLimited: true,
+          retryAfter: null,
+          retryAfterHuman: "suspended",
+          lastError: first.lastError || "Account suspended",
+          lastErrorCode: 403,
+        };
+      }
       // Find earliest persistent lock or lazy Antigravity quota-cache reset for retry timing.
-      const lockedConns = connections.filter(c => isModelLockActive(c, model));
+      const lockedConns = scopedConnections.filter(c => isModelLockActive(c, model));
       const expiries = lockedConns.map(c => getEarliestModelLockUntil(c)).filter(Boolean);
       if (isAntigravity && model && antigravityQuotaCache) {
-        connections.forEach((c) => {
+        scopedConnections.forEach((c) => {
           const connQuotas = antigravityQuotaCache.get(c.id);
           const quota = getAntigravityModelQuota(connQuotas, model) || connQuotas?.[model];
           const resetAt = quota?.resetAt;
@@ -127,7 +187,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       const earliest = expiries.sort()[0] || null;
       if (earliest) {
         const earliestConn = lockedConns[0];
-        log.warn("AUTH", `${provider} | all ${connections.length} accounts locked for ${model || "all"} (${formatRetryAfter(earliest)}) | lastError=${earliestConn?.lastError?.slice(0, 50)}`);
+        log.warn("AUTH", `${provider} | all ${scopedConnections.length} accounts locked for ${model || "all"} (${formatRetryAfter(earliest)}) | lastError=${earliestConn?.lastError?.slice(0, 50)}`);
         return {
           allRateLimited: true,
           retryAfter: earliest,
@@ -136,7 +196,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
           lastErrorCode: earliestConn?.errorCode || null
         };
       }
-      log.warn("AUTH", `${provider} | all ${connections.length} accounts unavailable`);
+      log.warn("AUTH", `${provider} | all ${scopedConnections.length} accounts unavailable`);
       return null;
     }
 
@@ -199,7 +259,19 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       connection = availableConnections[0];
     }
 
-    const resolvedProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
+    // The Antigravity CLI container owns its own egress proxy. 9router talks to
+    // the loopback wrapper directly, so it must not attach a proxy here — doing
+    // so makes every call try the proxy first and stall until it falls back.
+    const resolvedProxy = providerId === "antigravity-cli"
+      ? {
+          connectionProxyEnabled: false,
+          connectionProxyUrl: "",
+          connectionNoProxy: "",
+          proxyPoolId: null,
+          vercelRelayUrl: "",
+          strictProxy: false,
+        }
+      : await resolveConnectionProxyConfig(connection.providerSpecificData || {});
 
     return {
       authType: connection.authType,
@@ -254,20 +326,31 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   const githubResetAtMs = githubMonthlyResetMs(status, errorText, provider);
 
   // Provider-specific precise cooldown (e.g. codex usage_limit_reached resets_at) overrides backoff
+  const providerId = resolveProviderId(provider);
+  const isAgyBan = providerId === "antigravity-cli"
+    && Number(status) === 403
+    && /AGY_ACCOUNT_DISABLED|violation of terms|terms of service|banned|account.*disabled|permission denied/i.test(String(errorText || ""));
   let shouldFallback, cooldownMs, newBackoffLevel;
   if (githubResetAtMs) {
     shouldFallback = true;
     cooldownMs = githubResetAtMs - Date.now();
     newBackoffLevel = 0;
+  } else if (isAgyBan) {
+    // A banned/suspended Antigravity account does not recover in the usual
+    // 2-minute cooldown. Keep it out of rotation for a day; the operator can
+    // still disable it permanently from the provider page.
+    shouldFallback = true;
+    cooldownMs = 24 * 60 * 60 * 1000;
+    newBackoffLevel = 0;
   } else if (resetsAtMs && resetsAtMs > Date.now()) {
     shouldFallback = true;
     // Antigravity quota API provides exact per-model resetAt. Do not truncate it.
-    cooldownMs = resolveProviderId(provider) === "antigravity"
+    cooldownMs = providerId === "antigravity"
       ? resetsAtMs - Date.now()
       : Math.min(resetsAtMs - Date.now(), MAX_RATE_LIMIT_COOLDOWN_MS);
     newBackoffLevel = 0;
   } else {
-    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel, resolveProviderId(provider)));
+    ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel, providerId));
   }
   if (!shouldFallback) return { shouldFallback: false, cooldownMs: 0 };
 

@@ -349,6 +349,7 @@ export function isZeroContentResponse(data) {
  * @param {boolean} [options.sessionSticky=true] - Keep chosen model across session requests to retain prompt cache
  * @param {number} [options.confidenceThreshold=0.8] - Minimum confidence required for model switch (0-1)
  * @param {Function|null} [options.resolveSmartChoice=null] - Smart router resolver callback: (body, models) => Promise<{ choice, probabilities, confidence } | null>
+ * @param {Function|null} [options.memberFor=null] - Combo v2 member resolver: (modelStr) => { connectionId, accountFallback } | null
  * @returns {Promise<Response>}
  */
 export async function handleComboChat({
@@ -365,6 +366,7 @@ export async function handleComboChat({
   sessionSticky = true,
   confidenceThreshold = 0.8,
   resolveSmartChoice = null,
+  memberFor = null,
 }) {
   let rotatedModels = models;
   let activeStickyModel = null;
@@ -467,13 +469,17 @@ export async function handleComboChat({
   let earliestRetryAfter = null;
   let lastStatus = null;
   let requestScopedResult = null;
+  let lastFailureResponse = null;
 
   for (let i = 0; i < rotatedModels.length; i++) {
     const modelStr = rotatedModels[i];
-    log.info("COMBO", `Trying model ${i + 1}/${rotatedModels.length}: ${modelStr}`);
+    const member = typeof memberFor === "function" ? memberFor(modelStr) : null;
+    log.info("COMBO", `Trying model ${i + 1}/${rotatedModels.length}: ${modelStr}${member?.connectionId ? ` (account ${String(member.connectionId).slice(0, 8)})` : ""}`);
 
     try {
-      const result = await handleSingleModel(body, modelStr);
+      const result = member
+        ? await handleSingleModel(body, modelStr, member)
+        : await handleSingleModel(body, modelStr);
       
       // Success (2xx). A 2xx is necessary but NOT sufficient: Gemini aborts (e.g.
       // MALFORMED_FUNCTION_CALL) still return 200 and stream empty content, which would
@@ -555,6 +561,7 @@ export async function handleComboChat({
       }
 
       // Extract error info from response
+      lastFailureResponse = result;
       let errorText = result.statusText || "";
       let retryAfter = null;
       try {
@@ -631,6 +638,15 @@ export async function handleComboChat({
   if (requestScopedResult) {
     log.warn("COMBO", `No model served the request; returning the first request-scoped failure (${requestScopedResult.status})`);
     return requestScopedResult;
+  }
+
+  // All members failed on an auth/permission fault (banned account, revoked
+  // login, quota). Hand back the upstream response instead of a synthesized
+  // 200/503: the client then sees the real 401/402/403 status and message,
+  // which is what its retry/failover policy needs.
+  if (lastFailureResponse && [401, 402, 403].includes(lastFailureResponse.status)) {
+    log.warn("COMBO", `All members failed; returning the last auth/permission response (${lastFailureResponse.status})`);
+    return lastFailureResponse;
   }
 
   // All models failed
@@ -815,9 +831,10 @@ function collectPanel(calls, { minPanel, stragglerGraceMs, panelHardTimeoutMs })
  * @param {string} [options.comboName] - Combo name (logging)
  * @param {string} [options.judgeModel] - Judge model; falls back to panel[0]
  * @param {Object} [options.tuning] - Override FUSION_DEFAULTS (minPanel, grace, timeout)
+ * @param {Function|null} [options.memberFor] - (modelStr) => member metadata
  * @returns {Promise<Response>}
  */
-export async function handleFusionChat({ body, models, handleSingleModel, log, comboName, judgeModel, tuning }) {
+export async function handleFusionChat({ body, models, handleSingleModel, log, comboName, judgeModel, tuning, memberFor = null }) {
   const panel = Array.isArray(models) ? models.filter(Boolean) : [];
   if (panel.length === 0) {
     return new Response(
@@ -828,7 +845,10 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
 
   // A single-model fusion has nothing to fuse — just answer directly.
   if (panel.length === 1) {
-    return handleSingleModel(body, panel[0]);
+    const member = memberFor?.(panel[0]) || null;
+    return member
+      ? handleSingleModel(body, panel[0], false, member)
+      : handleSingleModel(body, panel[0]);
   }
 
   const cfg = { ...FUSION_DEFAULTS, ...(tuning || {}) };
@@ -851,7 +871,13 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
   }
 
   const t0 = Date.now();
-  const calls = panel.map((m) => withTimeout(handleSingleModel(panelBody, m, true), cfg.panelHardTimeoutMs));
+  const callPanel = (m) => {
+    const member = memberFor?.(m) || null;
+    return member
+      ? handleSingleModel(panelBody, m, true, member)
+      : handleSingleModel(panelBody, m, true);
+  };
+  const calls = panel.map((m) => withTimeout(callPanel(m), cfg.panelHardTimeoutMs));
   const settled = await collectPanel(calls, { ...cfg, minPanel });
   log.info("FUSION", `fan-out collected in ${Date.now() - t0}ms`);
 
@@ -888,13 +914,19 @@ export async function handleFusionChat({ body, models, handleSingleModel, log, c
   }
   if (answers.length === 1) {
     log.info("FUSION", `Only ${answers[0].model} succeeded — answering directly (no fusion)`);
-    return handleSingleModel(body, answers[0].model);
+    const member = memberFor?.(answers[0].model) || null;
+    return member
+      ? handleSingleModel(body, answers[0].model, false, member)
+      : handleSingleModel(body, answers[0].model);
   }
 
   // 4. Judge analyzes + writes one final answer (streams to client if requested).
   const judgeBody = appendUserTurn(body, buildJudgePrompt(answers));
   log.info("FUSION", `Judging ${answers.length} answers with ${judge}`);
-  return handleSingleModel(judgeBody, judge);
+  const judgeMember = memberFor?.(judge) || null;
+  return judgeMember
+    ? handleSingleModel(judgeBody, judge, false, judgeMember)
+    : handleSingleModel(judgeBody, judge);
 }
 
 export {

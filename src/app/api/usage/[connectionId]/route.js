@@ -8,6 +8,7 @@ import { getExecutor } from "open-sse/executors/index.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { USAGE_APIKEY_PROVIDERS } from "@/shared/constants/providers";
 import { isLeaseConnection } from "open-sse/services/minimaxCodeLease.js";
+import { refreshAgyQuota, toAntigravityUsage } from "@/sse/services/agyQuota.js";
 
 // Detect auth-expired messages returned by usage providers instead of throwing
 const AUTH_EXPIRED_PATTERNS = ["expired", "authentication", "unauthorized", "401", "re-authorize"];
@@ -142,6 +143,13 @@ export async function GET(request, { params }) {
     connection = await getProviderConnectionById(connectionId);
     if (!connection) {
       return Response.json({ error: "Connection not found" }, { status: 404 });
+    }
+
+    // Antigravity CLI: quota comes from the container wrapper (/v1/usage). It is
+    // already cached per connection with the same 60s rule as the chat path.
+    if (connection.provider === "antigravity-cli") {
+      const quotas = await refreshAgyQuota({ ...connection, id: connection.id }, { force });
+      return Response.json(toAntigravityUsage(quotas));
     }
 
     // Allow OAuth connections, plus whitelisted apikey providers (glm/minimax/kiro/...)

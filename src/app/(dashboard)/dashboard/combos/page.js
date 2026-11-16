@@ -10,6 +10,11 @@ import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { aggregateComboCapabilities } from "open-sse/providers/capabilities.js";
 import { resolveProviderId, AI_PROVIDERS } from "@/shared/constants/providers";
+import {
+  comboMemberModelString,
+  normalizeComboKeyIds,
+  parseComboModelString,
+} from "@/shared/utils/comboMembers";
 
 // Validate combo name: only a-z, A-Z, 0-9, -, _
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
@@ -66,9 +71,50 @@ function getPolicyBadgeLabel(strategy = {}) {
   return "Smart (≥80%)";
 }
 
+const DEFAULT_MEMBER_META = Object.freeze({ connectionId: "" });
+
+// Members keyed by their canonical model string. Legacy combos have no members;
+// they fall back to "auto account" for every model. accountFallback is legacy:
+// runtime is always account-first, then next member.
+function comboMemberMeta(combo) {
+  const map = {};
+  for (const member of combo?.members || []) {
+    const key = comboMemberModelString(member);
+    if (!key) continue;
+    map[key] = {
+      connectionId: member.connectionId || "",
+    };
+  }
+  return map;
+}
+
+// Active accounts of the member's provider, plus a placeholder for a pinned
+// account that is no longer active so the value is never silently dropped.
+function accountsForModel(activeProviders, model, pinnedId) {
+  const { provider } = parseComboModelString(model);
+  if (!provider) return [];
+  const providerId = resolveProviderId(provider);
+  const accounts = (activeProviders || [])
+    .filter((connection) => connection.provider === providerId)
+    .map((connection) => ({
+      id: connection.id,
+      name: connection.name || connection.displayName || connection.id.slice(0, 8),
+      testStatus: connection.testStatus,
+      errorCode: connection.errorCode,
+    }));
+  if (pinnedId && !accounts.some((account) => account.id === pinnedId)) {
+    accounts.push({ id: pinnedId, name: `Missing account (${String(pinnedId).slice(0, 8)})`, testStatus: "missing" });
+  }
+  return accounts;
+}
+
 export default function CombosPage() {
   const [combos, setCombos] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Render the interactive page only after hydration. Browser extensions
+  // (Dashlane et al.) inject attributes into inputs/buttons after SSR; rendering
+  // them during hydration makes React bail out and leaves a non-interactive page.
+  const [mounted, setMounted] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCombo, setEditingCombo] = useState(null);
   const [activeProviders, setActiveProviders] = useState([]);
@@ -81,6 +127,10 @@ export default function CombosPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { copied, copy } = useCopyToClipboard();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -379,7 +429,7 @@ export default function CombosPage() {
     }
   };
 
-  if (loading) {
+  if (loading || !mounted) {
     return (
       <div className="flex flex-col gap-6">
         <CardSkeleton />
@@ -668,6 +718,7 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
   // generic patterns and under-report the limits. getCaps carries the server's
   // answer for /api/models.
   const comboCaps = aggregateComboCapabilities(combo.models, comboByName, getCaps);
+  const pinnedCount = (combo.members || []).filter((member) => member.connectionId).length;
 
   return (
     <Card padding="sm" className={`group ${selected ? "ring-1 ring-primary/40 bg-primary/[0.03]" : ""}`}>
@@ -705,6 +756,12 @@ function ComboCard({ combo, getCaps, comboByName = {}, activeProviders = [], cop
               )}
               {combo.models.length > 3 && (
                 <span className="text-[10px] text-text-muted">+{combo.models.length - 3} more</span>
+              )}
+              <Badge variant={combo.keyIds?.length ? "warning" : "default"} size="sm">
+                {combo.keyIds?.length ? `${combo.keyIds.length} key${combo.keyIds.length === 1 ? "" : "s"}` : "Public"}
+              </Badge>
+              {pinnedCount > 0 && (
+                <Badge variant="info" size="sm">{pinnedCount} pinned</Badge>
               )}
             </div>
             {comboCaps && (
@@ -1079,7 +1136,7 @@ function CapacityAdapterCap({ cap, entry, onChange, activeProviders, getCaps }) 
   );
 }
 
-function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove }) {
+function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove, accounts = [], meta = DEFAULT_MEMBER_META, onMetaChange }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -1096,6 +1153,9 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
     setEditing(false);
   };
 
+  const connectionId = meta?.connectionId || "";
+  const showAccounts = accounts.length > 0 || Boolean(connectionId);
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter") commit();
     if (e.key === "Escape") { setDraft(model); setEditing(false); }
@@ -1105,74 +1165,94 @@ function ModelItem({ id, index, model, isFirst, isLast, onEdit, onMoveUp, onMove
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 bg-black/[0.02] hover:bg-black/[0.04] dark:bg-white/[0.02] dark:hover:bg-white/[0.04] transition-colors ${isDragging ? "shadow-md ring-1 ring-primary/30" : ""}`}
+      className={`group flex min-w-0 flex-col gap-1 rounded-md px-2 py-1 bg-black/[0.02] hover:bg-black/[0.04] dark:bg-white/[0.02] dark:hover:bg-white/[0.04] transition-colors ${isDragging ? "shadow-md ring-1 ring-primary/30" : ""}`}
     >
-      {/* Drag handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        type="button"
-        className="cursor-grab touch-none p-0.5 rounded text-text-muted hover:text-primary active:cursor-grabbing shrink-0"
-        title="Drag to reorder"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="9" cy="4" r="2"/><circle cx="15" cy="4" r="2"/>
-          <circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/>
-          <circle cx="9" cy="20" r="2"/><circle cx="15" cy="20" r="2"/>
-        </svg>
-      </button>
-
-      {/* Index badge */}
-      <span className="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">{index + 1}</span>
-
-      {/* Inline editable model value */}
-      {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={handleKeyDown}
-          className="min-w-0 flex-1 rounded border border-primary/40 bg-white px-1.5 py-0.5 font-mono text-xs text-text-main outline-none dark:bg-black/20"
-        />
-      ) : (
-        <div
-          className="min-w-0 flex-1 cursor-text truncate rounded px-1.5 py-0.5 font-mono text-xs text-text-main hover:bg-black/5 dark:hover:bg-white/5"
-          onClick={() => setEditing(true)}
-          title="Click to edit"
-        >
-          {model}
-        </div>
-      )}
-
-      {/* Priority arrows */}
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="flex min-w-0 items-center gap-1.5">
+        {/* Drag handle */}
         <button
-          onClick={onMoveUp}
-          disabled={isFirst}
-          className={`p-0.5 rounded ${isFirst ? "text-text-muted/20 cursor-not-allowed" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
-          title="Move up"
+          {...attributes}
+          {...listeners}
+          type="button"
+          className="cursor-grab touch-none p-0.5 rounded text-text-muted hover:text-primary active:cursor-grabbing shrink-0"
+          title="Drag to reorder"
         >
-          <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="9" cy="4" r="2"/><circle cx="15" cy="4" r="2"/>
+            <circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/>
+            <circle cx="9" cy="20" r="2"/><circle cx="15" cy="20" r="2"/>
+          </svg>
         </button>
+
+        {/* Index badge */}
+        <span className="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">{index + 1}</span>
+
+        {/* Inline editable model value */}
+        {editing ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={handleKeyDown}
+            className="min-w-0 flex-1 rounded border border-primary/40 bg-white px-1.5 py-0.5 font-mono text-xs text-text-main outline-none dark:bg-black/20"
+          />
+        ) : (
+          <div
+            className="min-w-0 flex-1 cursor-text truncate rounded px-1.5 py-0.5 font-mono text-xs text-text-main hover:bg-black/5 dark:hover:bg-white/5"
+            onClick={() => setEditing(true)}
+            title="Click to edit"
+          >
+            {model}
+          </div>
+        )}
+
+        {/* Priority arrows */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            onClick={onMoveUp}
+            disabled={isFirst}
+            className={`p-0.5 rounded ${isFirst ? "text-text-muted/20 cursor-not-allowed" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
+            title="Move up"
+          >
+            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={isLast}
+            className={`p-0.5 rounded ${isLast ? "text-text-muted/20 cursor-not-allowed" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
+            title="Move down"
+          >
+            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+          </button>
+        </div>
+
+        {/* Remove */}
         <button
-          onClick={onMoveDown}
-          disabled={isLast}
-          className={`p-0.5 rounded ${isLast ? "text-text-muted/20 cursor-not-allowed" : "text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"}`}
-          title="Move down"
+          onClick={onRemove}
+          className="p-0.5 hover:bg-red-500/10 rounded text-text-muted hover:text-red-500 transition-all"
+          title="Remove"
         >
-          <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+          <span className="material-symbols-outlined text-[12px]">close</span>
         </button>
       </div>
 
-      {/* Remove */}
-      <button
-        onClick={onRemove}
-        className="p-0.5 hover:bg-red-500/10 rounded text-text-muted hover:text-red-500 transition-all"
-        title="Remove"
-      >
-        <span className="material-symbols-outlined text-[12px]">close</span>
-      </button>
+      {showAccounts && (
+        <div className="ml-9 flex min-w-0 flex-wrap items-center gap-1.5 pb-0.5">
+          <select
+            value={connectionId}
+            onChange={(event) => onMetaChange?.({ connectionId: event.target.value })}
+            className="min-w-0 max-w-full rounded border border-black/10 bg-white/50 px-1.5 py-0.5 text-[11px] text-text-main outline-none dark:border-white/10 dark:bg-black/20"
+            title="Preferred account for the first attempt; failover then uses other accounts of this provider"
+          >
+            <option value="">Auto account</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}{account.errorCode === 403 ? " (suspended)" : account.testStatus && account.testStatus !== "active" ? ` (${account.testStatus})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
@@ -1185,6 +1265,9 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
   const [modelAliases, setModelAliases] = useState({});
+  const [memberMeta, setMemberMeta] = useState(() => comboMemberMeta(combo));
+  const [keyIds, setKeyIds] = useState(() => normalizeComboKeyIds(combo?.keyIds));
+  const [keys, setKeys] = useState([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1207,10 +1290,18 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
 
   const fetchModalData = async () => {
     try {
-      const aliasesRes = await fetch("/api/models/alias");
-      if (!aliasesRes.ok) return;
-      const aliasesData = await aliasesRes.json();
-      setModelAliases(aliasesData.aliases || {});
+      const [aliasesRes, keysRes] = await Promise.all([
+        fetch("/api/models/alias"),
+        fetch("/api/keys"),
+      ]);
+      if (aliasesRes.ok) {
+        const aliasesData = await aliasesRes.json();
+        setModelAliases(aliasesData.aliases || {});
+      }
+      if (keysRes.ok) {
+        const keysData = await keysRes.json();
+        setKeys((keysData.keys || []).filter((key) => key.isActive !== false));
+      }
     } catch (error) {
       console.error("Error fetching modal data:", error);
     }
@@ -1251,7 +1342,45 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   };
 
   const handleRemoveModel = (index) => {
+    const removed = models[index];
     setModels(models.filter((_, i) => i !== index));
+    if (removed) {
+      setMemberMeta((prev) => {
+        const next = { ...prev };
+        delete next[removed];
+        return next;
+      });
+    }
+  };
+
+  const handleEditModel = (index, nextModel) => {
+    const previous = models[index];
+    const updated = [...models];
+    updated[index] = nextModel;
+    setModels(updated);
+    if (previous && previous !== nextModel) {
+      setMemberMeta((prev) => {
+        const next = { ...prev };
+        if (next[previous]) {
+          next[nextModel] = next[previous];
+          delete next[previous];
+        }
+        return next;
+      });
+    }
+  };
+
+  const handleMemberMetaChange = (model, patch) => {
+    setMemberMeta((prev) => ({
+      ...prev,
+      [model]: { ...DEFAULT_MEMBER_META, ...(prev[model] || {}), ...patch },
+    }));
+  };
+
+  const toggleKeyId = (id) => {
+    setKeyIds((prev) => (
+      prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id]
+    ));
   };
 
   const handleMoveUp = (index) => {
@@ -1271,7 +1400,19 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
   const handleSave = async () => {
     if (!validateName(name)) return;
     setSaving(true);
-    await onSave({ name: name.trim(), models });
+    const members = models.map((model) => {
+      const { provider, model: bareModel } = parseComboModelString(model);
+      const meta = memberMeta[model] || DEFAULT_MEMBER_META;
+      return {
+        provider,
+        model: bareModel,
+        connectionId: meta.connectionId || null,
+        // Runtime is account-first for every member; the stored value is kept
+        // for backward compatibility with older clients.
+        accountFallback: "next-account",
+      };
+    });
+    await onSave({ name: name.trim(), models, members, keyIds });
     setSaving(false);
   };
 
@@ -1312,24 +1453,26 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
               <SortableContext items={modelItems.map((m) => m.uid)} strategy={verticalListSortingStrategy}>
                 <div className="flex max-h-[55vh] min-w-0 flex-col gap-1 overflow-y-auto sm:max-h-[350px]">
-                  {modelItems.map(({ uid, model }, index) => (
-                    <ModelItem
-                      key={uid}
-                      id={uid}
-                      index={index}
-                      model={model}
-                      isFirst={index === 0}
-                      isLast={index === modelItems.length - 1}
-                      onEdit={(newVal) => {
-                        const updated = [...models];
-                        updated[index] = newVal;
-                        setModels(updated);
-                      }}
-                      onMoveUp={() => handleMoveUp(index)}
-                      onMoveDown={() => handleMoveDown(index)}
-                      onRemove={() => handleRemoveModel(index)}
-                    />
-                  ))}
+                  {modelItems.map(({ uid, model }, index) => {
+                    const meta = memberMeta[model] || DEFAULT_MEMBER_META;
+                    return (
+                      <ModelItem
+                        key={uid}
+                        id={uid}
+                        index={index}
+                        model={model}
+                        isFirst={index === 0}
+                        isLast={index === modelItems.length - 1}
+                        accounts={accountsForModel(activeProviders, model, meta.connectionId)}
+                        meta={meta}
+                        onMetaChange={(patch) => handleMemberMetaChange(model, patch)}
+                        onEdit={(newVal) => handleEditModel(index, newVal)}
+                        onMoveUp={() => handleMoveUp(index)}
+                        onMoveDown={() => handleMoveDown(index)}
+                        onRemove={() => handleRemoveModel(index)}
+                      />
+                    );
+                  })}
                 </div>
               </SortableContext>
             </DndContext>
@@ -1343,6 +1486,52 @@ function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindF
               <span className="material-symbols-outlined text-[16px]">add</span>
               Add Model
             </button>
+            <p className="mt-1 text-[10px] text-text-muted">
+              Failover tries another account of the same provider first, then the next member. A pinned account is only the first choice.
+            </p>
+          </div>
+
+          {/* API keys allowed to call this combo */}
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">API keys</label>
+              <Badge variant={keyIds.length ? "warning" : "default"} size="sm">
+                {keyIds.length ? `${keyIds.length} selected` : "Public"}
+              </Badge>
+            </div>
+            <p className="mb-1.5 text-[10px] text-text-muted">
+              No selection = public: every API key can call this combo. Otherwise only the selected keys can.
+            </p>
+            {keys.length === 0 ? (
+              <p className="text-xs text-text-muted">
+                No active API keys yet. Create one on the Endpoint page.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {keys.map((key) => {
+                  const active = keyIds.includes(key.id);
+                  return (
+                    <button
+                      key={key.id}
+                      type="button"
+                      onClick={() => toggleKeyId(key.id)}
+                      aria-pressed={active}
+                      className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                        active
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : "border-black/10 text-text-muted hover:border-primary/40 dark:border-white/10"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[12px]">
+                        {active ? "check_circle" : "key"}
+                      </span>
+                      <span className="truncate">{key.name || "Key"}</span>
+                      <span className="opacity-60">{String(key.key || key.id).slice(-4)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Actions */}

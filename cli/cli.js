@@ -138,9 +138,10 @@ const MAX_PORT_ATTEMPTS = 10;
 // return as soon as the condition holds, so the common case costs nothing.
 const PROCESS_EXIT_WAIT_MS = 1000;
 const PORT_RELEASE_WAIT_MS = 3000;
-// Identifiers for killAllAppProcesses - only kill 9router specifically
+// Identifiers for killAllAppProcesses - only kill UltraRouter specifically
 const PROCESS_IDENTIFIERS = [
-  '9router'  // Only package name - avoid killing other apps
+  'ultrarouter', // current package name
+  '9router'  // legacy package name / compatibility alias - avoid killing other apps
 ];
 
 // Parse arguments
@@ -182,10 +183,10 @@ Options:
   -v, --version       Show version
 
 Commands:
-  connect <server-url> Configure Claude Code for a remote 9router server
-                      (npx 9router connect http://host:20128 — no install needed)
-  show [tool…]        Show each CLI tool's current 9router config and models
-                      (e.g. 9router show claude)
+  connect <server-url> Configure Claude Code for a remote UltraRouter server
+                      (npx ultrarouter connect http://host:20128 — no install needed)
+  show [tool…]        Show each CLI tool's current UltraRouter config and models
+                      (e.g. ultrarouter show claude)
   xai video --prompt "..." --output video.mp4
                       Generate a Grok Imagine video via the running gateway
                       (see: ${APP_NAME} xai video --help)
@@ -299,11 +300,11 @@ function killAllAppProcesses() {
           });
           const lines = output.split("\n").slice(1).filter(l => l.trim());
           lines.forEach(line => {
-            // Whitelist: real node process running 9router/cli.js, or next-server.
-            // Avoids killing editors/grep/strace/cursor that just have "9router" in cmdline.
+            // Whitelist: real node process running ultrarouter/9router cli.js, or next-server.
+            // Avoids killing editors/grep/strace/cursor that just have the package name in cmdline.
             const cmd = line.toLowerCase();
             const isAppProcess =
-              (cmd.includes("node") && cmd.includes("9router") && (cmd.includes("cli.js") || cmd.includes("\\9router") || cmd.includes("/9router")))
+              (cmd.includes("node") && (cmd.includes("ultrarouter") || cmd.includes("9router")) && (cmd.includes("cli.js") || cmd.includes("\\ultrarouter") || cmd.includes("/ultrarouter") || cmd.includes("\\9router") || cmd.includes("/9router")))
               || cmd.includes("next-server");
             if (isAppProcess) {
               const match = line.match(/^"(\d+)"/);
@@ -325,11 +326,11 @@ function killAllAppProcesses() {
           const lines = output.split('\n');
 
           lines.forEach(line => {
-            // Whitelist: real node process running 9router/cli.js, or next-server.
-            // Avoids killing grep/strace/editors/cursor that incidentally match "9router".
+            // Whitelist: real node process running ultrarouter/9router cli.js, or next-server.
+            // Avoids killing grep/strace/editors/cursor that incidentally match the package name.
             const cmd = line.toLowerCase();
             const isAppProcess =
-              (cmd.includes("node") && cmd.includes("9router") && (cmd.includes("cli.js") || cmd.includes("/9router")))
+              (cmd.includes("node") && (cmd.includes("ultrarouter") || cmd.includes("9router")) && (cmd.includes("cli.js") || cmd.includes("/ultrarouter") || cmd.includes("/9router")))
               || cmd.includes("next-server");
             if (isAppProcess) {
               const parts = line.trim().split(/\s+/);
@@ -849,7 +850,7 @@ function startServer(updatePromise) {
             process.on("SIGHUP", () => {});
 
             console.log(`\n⏳ Switching to tray mode... (icon already visible in menu bar)`);
-            console.log(`🔔 9Router is running in tray (PID: ${process.pid})`);
+            console.log(`🔔 UltraRouter is running in tray (PID: ${process.pid})`);
             console.log(`   Server: http://${displayHost}:${port}`);
             console.log(`\n💡 You can close this terminal. Right-click tray icon to quit.\n`);
 
@@ -868,7 +869,7 @@ function startServer(updatePromise) {
           });
           bgProcess.unref();
 
-          console.log(`🔔 9Router is now running in background (PID: ${bgProcess.pid})`);
+          console.log(`🔔 UltraRouter is now running in background (PID: ${bgProcess.pid})`);
           console.log(`   Server: http://${displayHost}:${port}`);
           console.log(`\n💡 You can close this terminal. Right-click tray icon to quit.\n`);
 

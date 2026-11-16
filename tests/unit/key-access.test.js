@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const fx = vi.hoisted(() => ({
   combos: [
-    { id: "c1", name: "Main", models: ["openai/model-a", "openai/model-b"] },
-    { id: "c2", name: "other", models: ["openai/model-c"] },
+    { id: "c1", name: "Main", models: ["openai/model-a", "openai/model-b"], keyIds: [] },
+    { id: "c2", name: "other", models: ["openai/model-c"], keyIds: ["scoped"] },
   ],
   nodes: [{ id: "openai-compatible-chat-n1", type: "openai-compatible", prefix: "mock" }],
   aliases: { fast: "openai/model-a", bee: "openai/model-b" },
@@ -50,13 +50,16 @@ beforeEach(() => {
   key("cx", { restricted: true, allow: ["cx/gpt-5"] });
   key("node", { restricted: true, allow: ["mock/glm-4"] });
   key("tavily", { restricted: true, allow: ["tavily", "Main"] });
+  key("scoped", { restricted: true, allow: [] });
 });
 
 describe("unrestricted passthrough", () => {
-  it("no key, unknown key and unrestricted key all yield no context (today's behaviour)", async () => {
+  it("no key and unknown key yield no context; a known unrestricted key gets an unrestricted context", async () => {
     expect(await ctxFor(null)).toBeNull();
     expect(await ctxFor("sk-nope")).toBeNull();
-    expect(await ctxFor("sk-open")).toBeNull();
+    const openCtx = await ctxFor("sk-open");
+    expect(openCtx).not.toBeNull();
+    expect(openCtx.restricted).toBe(false);
     for (const m of ["Main", "openai/model-a", "fast", "anything/at-all"]) {
       expect(await status("sk-open", m)).toBe(200);
     }
@@ -77,8 +80,9 @@ describe("restricted: allow by exact model", () => {
     expect(await status("sk-b", "openai/model-a")).toBe(403);
     expect(await status("sk-b", "openai/model-b-plus")).toBe(403); // exact, not prefix
   });
-  it("denies a combo whose members include the allowed model", async () => {
-    expect(await status("sk-b", "Main")).toBe(403);
+  it("a public combo is callable; a key-scoped combo is not", async () => {
+    expect(await status("sk-b", "Main")).toBe(200);
+    expect(await status("sk-b", "other")).toBe(403);
   });
 });
 
@@ -134,13 +138,17 @@ describe("case-insensitivity", () => {
   });
 });
 
-describe("empty list blocks everything", () => {
-  it("denies combos, models, aliases, search providers and filters /v1/models to nothing", async () => {
-    for (const m of ["Main", "other", "openai/model-a", "fast", "cx/gpt-5"]) expect(await status("sk-empty", m)).toBe(403);
+describe("empty list still allows public combos", () => {
+  it("denies direct models/search and key-scoped combos, but a public combo stays callable", async () => {
+    expect(await status("sk-empty", "Main")).toBe(200); // public combo
+    for (const m of ["other", "openai/model-a", "fast", "cx/gpt-5"]) {
+      expect(await status("sk-empty", m)).toBe(403);
+    }
     const ctx = await ctxFor("sk-empty");
     expect((await engine.enforceKeyAccessProvider(ctx, "tavily", null)).status).toBe(403);
     expect((await engine.enforceKeyAccessResolved(ctx, "openai/model-a", "openai", "model-a")).status).toBe(403);
-    expect(await engine.filterModelsListForKey(ctx, [{ id: "Main", owned_by: "combo" }, { id: "openai/model-a", owned_by: "openai" }])).toEqual([]);
+    expect(await engine.filterModelsListForKey(ctx, [{ id: "Main", owned_by: "combo" }, { id: "openai/model-a", owned_by: "openai" }]))
+      .toEqual([{ id: "Main", owned_by: "combo" }]);
   });
 });
 
@@ -186,14 +194,18 @@ describe("/v1/models filtering", () => {
   const ids = async (k) => (await engine.filterModelsListForKey(await ctxFor(k), list)).map((m) => m.id);
   it("lists only the allowed combos and models for each key", async () => {
     expect(await ids("sk-combo")).toEqual(["Main"]);
-    expect(await ids("sk-b")).toEqual(["openai/model-b"]);
-    expect(await ids("sk-cx")).toEqual(["cx/gpt-5"]);
-    expect(await ids("sk-node")).toEqual(["mock/glm-4"]);
+    expect(await ids("sk-b")).toEqual(["Main", "openai/model-b"]);
+    expect(await ids("sk-cx")).toEqual(["Main", "cx/gpt-5"]);
+    expect(await ids("sk-node")).toEqual(["Main", "mock/glm-4"]);
     expect(await ids("sk-tavily")).toEqual(["Main", "tavily/search"]);
-    expect(await ids("sk-empty")).toEqual([]);
+    expect(await ids("sk-empty")).toEqual(["Main"]);
+    expect(await ids("sk-scoped")).toEqual(["Main", "other"]);
   });
-  it("leaves the list untouched for an unrestricted key", async () => {
-    expect(await engine.filterModelsListForKey(await ctxFor("sk-open"), list)).toBe(list);
+  it("keeps the list untouched for an unrestricted key when every combo is public", async () => {
+    const publicList = list.filter((entry) => entry.id !== "other");
+    expect(await engine.filterModelsListForKey(await ctxFor("sk-open"), publicList)).toBe(publicList);
+    // A key-scoped combo is hidden from a key it does not list, even unrestricted.
+    expect(await ids("sk-open")).toEqual(list.filter((entry) => entry.id !== "other").map((entry) => entry.id));
   });
 });
 

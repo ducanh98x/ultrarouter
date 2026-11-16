@@ -21,6 +21,7 @@ import SecurityWarning from "./components/SecurityWarning";
 import KeyAccessControls from "./components/KeyAccessControls";
 export default function APIPageClient({ machineId }) {
   const [keys, setKeys] = useState([]);
+  const [combos, setCombos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
@@ -255,7 +256,16 @@ export default function APIPageClient({ machineId }) {
         return data.keys || [];
       };
 
-      let existing = await fetchKeys();
+      const [initialKeys, combosRes] = await Promise.all([
+        fetchKeys(),
+        fetch("/api/combos", { cache: "no-store" }),
+      ]);
+      if (combosRes.ok) {
+        const combosData = await combosRes.json();
+        setCombos(combosData.combos || []);
+      }
+
+      let existing = initialKeys;
       // Auto-provision a default key for first-time users so the endpoint works out of the box.
       if (existing.length === 0) {
         try {
@@ -1068,6 +1078,16 @@ export default function APIPageClient({ machineId }) {
                       }
                     })}
                   />
+                  {(() => {
+                    const assigned = combos.filter((combo) => (combo.keyIds || []).includes(key.id));
+                    if (assigned.length === 0) return null;
+                    return (
+                      <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-text-muted">
+                        <span className="material-symbols-outlined text-[14px]">layers</span>
+                        Combos: {assigned.map((combo) => combo.name).join(", ")}
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-2 shrink-0 pt-0.5">
                   <Toggle

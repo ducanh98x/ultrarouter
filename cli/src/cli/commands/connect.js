@@ -13,13 +13,13 @@ const path = require("path");
 const { TOOL_IDS, CLAUDE_MODELS, resolveTools } = require("./connectTools");
 
 const HELP = `
-Usage: 9router connect <server-url> [options]
+Usage: ultrarouter connect <server-url> [options]
 
-Configure CLI tools on THIS machine to use a remote 9router server.
+Configure CLI tools on THIS machine to use a remote UltraRouter server.
 No local server is started. Run without installing:
 
-  npx 9router connect http://<server-host>:20128
-  npx 9router connect http://<server-host>:20128 --tools claude,codex,opencode
+  npx ultrarouter connect http://<server-host>:20128
+  npx ultrarouter connect http://<server-host>:20128 --tools claude,codex,opencode
 
 Options:
   --tools <list>         Comma-separated tools to configure (prompted if omitted
@@ -38,15 +38,15 @@ Options:
   --fable|--opus|--sonnet|--haiku <model>
                          Override a Claude Code tier (default: the server's value)
   --print-env            Also print OpenAI-compatible env vars for other CLIs
-  --reset                Remove 9router settings from the selected tools and exit
+  --reset                Remove UltraRouter settings from the selected tools and exit
   -h, --help             Show this help
 
 Models come from the server's own CLI-tools config (set on its dashboard).
 Nothing is hardcoded: a Claude tier the server leaves unset is left unset,
 and a non-Claude tool with no model anywhere is skipped. Flags override:
 
-  npx 9router connect http://<server-host>:20128 --tools claude --sonnet cc/claude-sonnet-5-5
-  npx 9router connect http://<server-host>:20128 --tools codex,opencode --model ocg/deepseek-flash
+  npx ultrarouter connect http://<server-host>:20128 --tools claude --sonnet cc/claude-sonnet-5-5
+  npx ultrarouter connect http://<server-host>:20128 --tools codex,opencode --model ocg/deepseek-flash
 `;
 
 function parseArgs(argv) {
@@ -132,7 +132,7 @@ const prompt = (p) => p.run().catch((err) => { throw err || new Cancelled("Cance
 async function promptPassword() {
   if (!process.stdin.isTTY) throw new Error("Password required: pass --password or set NINE_ROUTER_PASSWORD");
   const { Password } = require("enquirer");
-  return prompt(new Password({ message: "9router dashboard password" }));
+  return prompt(new Password({ message: "UltraRouter dashboard password" }));
 }
 
 async function request(url, { method = "GET", body, cookie, apiKey } = {}) {
@@ -290,7 +290,7 @@ async function runConnect(argv) {
     for (const t of tools) {
       try {
         const files = await t.reset();
-        console.log(files.length ? `✅ ${t.name}: removed 9router settings (${files.join(", ")})` : `• ${t.name}: nothing to reset`);
+        console.log(files.length ? `✅ ${t.name}: removed UltraRouter settings (${files.join(", ")})` : `• ${t.name}: nothing to reset`);
       } catch (err) {
         failed++;
         console.log(`❌ ${t.name}: ${err.message}`);
@@ -395,7 +395,7 @@ async function runConnect(argv) {
   }
   for (const [id, m] of Object.entries(toolModels)) if (m) console.log(`   ${id} model: ${m}`);
   if (tools.some((t) => t.id === "omp")) console.log("   omp models: every server model, listed under 9router in /model");
-  console.log(`   Restart the tools to apply. Undo: npx 9router connect --reset --tools ${tools.map((t) => t.id).join(",")}`);
+  console.log(`   Restart the tools to apply. Undo: npx ultrarouter connect --reset --tools ${tools.map((t) => t.id).join(",")}`);
 
   if (opts.printEnv) {
     console.log("\nOpenAI-compatible CLIs (codex, opencode, aider, …):");

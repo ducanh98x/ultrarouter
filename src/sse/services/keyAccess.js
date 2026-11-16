@@ -1,21 +1,19 @@
 // Per-API-key access control for the /v1/* inference keys.
 //
-// Two modes per key: UNRESTRICTED (default — exactly today's behaviour) or
-// RESTRICTED, where the key may call ONLY the combos and models in its allow
-// list. No wildcards, no deny mode. Matching is exact and case-insensitive, on
-// RESOLVED identities, so every spelling that routes to the same target is
-// treated the same and no spelling can route somewhere the list does not name:
+// Two modes per key: UNRESTRICTED (default) or RESTRICTED. Combo access is
+// governed separately by the combo's own `keyIds` (empty = public to every
+// key), which is authoritative: a key listed there may call the combo even
+// when its own allow list does not name it, and a key whose allow list names
+// the combo is still denied when `keyIds` does not list it. The key's allow
+// list gates DIRECT model calls:
 //
-//   * a request that routes as a combo (getComboModels — the lookup routing
-//     itself uses) is allowed iff that combo's name is listed;
 //   * a request that routes to a model is allowed iff its resolved
 //     `providerId/model` equals the resolved `providerId/model` of a listed
 //     model entry. So `cx/gpt-5`, `codex/gpt-5` and an alias that points there
 //     are one target; a raw string that merely looks like a listed entry but
-//     routes elsewhere (e.g. `MAIN` when the combo is `Main`, which routes to
-//     `openai/MAIN`) is not;
+//     routes elsewhere (e.g. `MAIN` when the combo is `Main`) is not;
 //   * search/fetch (provider IS the model) are allowed iff the resolved
-//     provider id is listed, or the request is a listed combo.
+//     provider id is listed.
 //
 // An allowed combo grants its members when they are reached THROUGH that combo
 // (the check runs once, on the requested target, before combo expansion). It
@@ -26,6 +24,7 @@ import { getApiKeyByKey } from "@/lib/db/repos/apiKeysRepo.js";
 import { getCombos } from "@/lib/db/repos/combosRepo.js";
 import { getModelInfo, getComboModels } from "./model.js";
 import { resolveProviderId } from "@/shared/constants/providers.js";
+import { normalizeComboKeyIds } from "@/shared/utils/comboMembers.js";
 import {
   KEY_ACCESS_COMBO_OWNER,
   KEY_ACCESS_PROVIDER_AS_MODEL_KINDS,
@@ -62,33 +61,39 @@ export function extractClientApiKey(request) {
 }
 
 /**
- * Access context for the request's key, or null when the request is
- * unrestricted (no key, unknown key, or a key whose access is unrestricted).
- * Keys are only authenticated elsewhere (middleware / requireApiKey); this only
- * decides what an identified key may call.
+ * Access context for the request's key. A known key always gets a context (it
+ * may be unrestricted); keyIds scoping on combos needs the key id even when the
+ * key has no allow list. Unknown/no key → null (= unrestricted local mode).
  */
 export async function getKeyAccessContext(request) {
   const apiKey = extractClientApiKey(request);
   if (!apiKey) return null;
   const record = await getApiKeyByKey(apiKey);
-  if (!record?.access?.restricted) return null;
+  if (!record) return null;
   return {
     keyId: record.id,
     keyName: record.name || record.id,
-    allow: record.access.allow || [],
+    restricted: Boolean(record.access?.restricted),
+    allow: record.access?.allow || [],
     _sets: null,
   };
 }
 
-// Resolve the allow list once per request: combo names, resolved model ids,
-// and resolved provider ids (for provider-as-model kinds).
+// Resolve the allow list once per request: combo names/policies, resolved model
+// ids, and resolved provider ids (for provider-as-model kinds).
 async function getAllowSets(ctx) {
-  if (ctx._sets) return ctx._sets;
-  const comboNames = new Set((await getCombos()).map((c) => lower(c.name)));
+  if (ctx?._sets) return ctx._sets;
+  const allCombos = await getCombos();
+  const comboNames = new Set(allCombos.map((c) => lower(c.name)));
+  // keyIds is authoritative for combo access: [] = public. Kept separately from
+  // the key's own allow list, which still gates direct model calls.
+  const comboPolicies = new Map(
+    allCombos.map((c) => [lower(c.name), normalizeComboKeyIds(c.keyIds)])
+  );
   const combos = new Set();
   const models = new Set();
   const providers = new Set();
-  for (const entry of ctx.allow) {
+  for (const entry of ctx?.allow || []) {
     const key = lower(entry);
     if (comboNames.has(key)) {
       combos.add(key);
@@ -98,11 +103,13 @@ async function getAllowSets(ctx) {
     if (info?.provider && info.model) models.add(canonicalModel(info.provider, info.model));
     if (!entry.includes("/")) providers.add(lower(resolveProviderId(entry)));
   }
-  ctx._sets = { combos, models, providers };
-  return ctx._sets;
+  const sets = { combos, models, providers, comboPolicies };
+  if (ctx) ctx._sets = sets;
+  return sets;
 }
 
 async function isModelStringAllowed(ctx, requested) {
+  if (!ctx?.restricted) return true;
   const sets = await getAllowSets(ctx);
   const info = await getModelInfo(requested);
   // provider null ⇔ an existing combo with no members (routes nowhere).
@@ -111,7 +118,7 @@ async function isModelStringAllowed(ctx, requested) {
 }
 
 export function keyAccessDeniedResponse(ctx, requested) {
-  log.warn("AUTH", `key-access: key "${ctx.keyName}" denied "${requested}"`);
+  log.warn("AUTH", `key-access: key "${ctx?.keyName || "anonymous"}" denied "${requested}"`);
   return errorResponse(HTTP_STATUS.FORBIDDEN, keyAccessDeniedMessage(requested));
 }
 
@@ -121,14 +128,24 @@ export function keyAccessDeniedResponse(ctx, requested) {
  * @returns {Promise<Response|null>} a 403 Response, or null when allowed.
  */
 export async function enforceKeyAccess(ctx, requested) {
-  if (!ctx) return null;
-  if (typeof requested !== "string" || !requested) return keyAccessDeniedResponse(ctx, String(requested ?? ""));
+  if (typeof requested !== "string" || !requested) {
+    return ctx ? keyAccessDeniedResponse(ctx, String(requested ?? "")) : null;
+  }
   const sets = await getAllowSets(ctx);
+
+  // Combo: keyIds is the only authority. Empty list = public; a listed key can
+  // call it even when its own allow list does not name the combo. getComboModels
+  // is routing's own exact lookup, so a case variant that routes to a DIRECT
+  // model is not mistaken for the combo here.
   const comboModels = await getComboModels(requested);
-  const allowed = comboModels
-    ? sets.combos.has(lower(requested))
-    : await isModelStringAllowed(ctx, requested);
-  return allowed ? null : keyAccessDeniedResponse(ctx, requested);
+  if (comboModels) {
+    const keyIds = sets.comboPolicies.get(lower(requested)) || [];
+    if (keyIds.length === 0) return null;
+    return ctx && keyIds.includes(ctx.keyId) ? null : keyAccessDeniedResponse(ctx, requested);
+  }
+
+  if (!ctx || !ctx.restricted) return null;
+  return (await isModelStringAllowed(ctx, requested)) ? null : keyAccessDeniedResponse(ctx, requested);
 }
 
 /**
@@ -138,7 +155,7 @@ export async function enforceKeyAccess(ctx, requested) {
  * an unverifiable target is not an allowed one.
  */
 export async function enforceKeyAccessResolved(ctx, requested, provider, model) {
-  if (!ctx) return null;
+  if (!ctx || !ctx.restricted) return null;
   const label = requested || (provider ? `${provider}/${model ?? ""}` : "");
   if (!provider || !model) return keyAccessDeniedResponse(ctx, label);
   const sets = await getAllowSets(ctx);
@@ -150,12 +167,17 @@ export async function enforceKeyAccessResolved(ctx, requested, provider, model) 
  * @param {string[]|null} comboModels - routing's own combo resolution for `requested`
  */
 export async function enforceKeyAccessProvider(ctx, requested, comboModels) {
-  if (!ctx) return null;
-  if (typeof requested !== "string" || !requested) return keyAccessDeniedResponse(ctx, String(requested ?? ""));
+  if (typeof requested !== "string" || !requested) {
+    return ctx ? keyAccessDeniedResponse(ctx, String(requested ?? "")) : null;
+  }
   const sets = await getAllowSets(ctx);
-  const allowed = comboModels
-    ? sets.combos.has(lower(requested))
-    : sets.providers.has(lower(resolveProviderId(requested)));
+  if (comboModels) {
+    const keyIds = sets.comboPolicies.get(lower(requested)) || [];
+    if (keyIds.length === 0) return null;
+    return ctx && keyIds.includes(ctx.keyId) ? null : keyAccessDeniedResponse(ctx, requested);
+  }
+  if (!ctx || !ctx.restricted) return null;
+  const allowed = sets.providers.has(lower(resolveProviderId(requested)));
   return allowed ? null : keyAccessDeniedResponse(ctx, requested);
 }
 
@@ -166,7 +188,7 @@ export async function enforceKeyAccessProvider(ctx, requested, comboModels) {
  * model just shortens the fallback list, so combo failover is unaffected.
  */
 export async function filterAdapterModels(ctx, augmented, original) {
-  if (!ctx || !Array.isArray(augmented)) return augmented;
+  if (!ctx || !ctx.restricted || !Array.isArray(augmented)) return augmented;
   const keep = new Set(original || []);
   const out = [];
   for (const m of augmented) {
@@ -176,24 +198,39 @@ export async function filterAdapterModels(ctx, augmented, original) {
   return out;
 }
 
-/** /v1/models: a restricted key sees only the combos and models it may call. */
+/** /v1/models: a key sees only the combos/models it may call. */
 export async function filterModelsListForKey(ctx, list) {
   if (!ctx || !Array.isArray(list)) return list;
   const sets = await getAllowSets(ctx);
   const out = [];
+  let changed = false;
   for (const entry of list) {
-    if (!entry?.id) continue;
+    if (!entry?.id) {
+      changed = true;
+      continue;
+    }
     if (entry.owned_by === KEY_ACCESS_COMBO_OWNER) {
-      if (sets.combos.has(lower(entry.id))) out.push(entry);
+      const keyIds = sets.comboPolicies.get(lower(entry.id));
+      if (!keyIds || keyIds.length === 0 || keyIds.includes(ctx.keyId)) out.push(entry);
+      else changed = true;
       continue;
     }
     const info = await getModelInfo(entry.id);
-    if (!info?.provider) continue;
+    if (!info?.provider) {
+      changed = true;
+      continue;
+    }
+    if (!ctx.restricted) {
+      out.push(entry);
+      continue;
+    }
     if (KEY_ACCESS_PROVIDER_AS_MODEL_KINDS.includes(entry.kind)) {
       if (sets.providers.has(lower(info.provider))) out.push(entry);
+      else changed = true;
       continue;
     }
     if (sets.models.has(canonicalModel(info.provider, info.model))) out.push(entry);
+    else changed = true;
   }
-  return out;
+  return changed ? out : list;
 }

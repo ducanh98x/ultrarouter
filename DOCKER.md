@@ -1,6 +1,6 @@
 # Docker
 
-Run 9Router in a container. Published image: [`decolua/9router`](https://hub.docker.com/r/decolua/9router) — multi-platform `linux/amd64` + `linux/arm64`.
+Run UltraRouter in a container. The published image is still upstream [`decolua/9router`](https://hub.docker.com/r/decolua/9router) — multi-platform `linux/amd64` + `linux/arm64`. For the newest fork features, install from npm (`npm i -g ultrarouter@latest`).
 
 ---
 
@@ -28,7 +28,35 @@ docker start 9router          # start again
 docker rm -f 9router          # remove
 ```
 
-## Data persistence
+## Antigravity CLI provider
+
+The **Antigravity CLI** provider runs the official `agy` binary in one sibling Docker container per account. UltraRouter manages those containers through the host Docker socket.
+
+Recommended: run UltraRouter **directly on the host** (npm/systemd) with the UltraRouter user in the `docker` group. The provider publishes each wrapper on `127.0.0.1:20800-20999`, so UltraRouter and the containers must share a loopback namespace.
+
+If you run UltraRouter itself in Docker, use host networking on Linux and mount the Docker socket:
+
+```bash
+docker run -d \
+  --network host \
+  -v "$HOME/.9router:/app/data" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e DATA_DIR=/app/data \
+  --name 9router \
+  decolua/9router:latest
+```
+
+Build the gateway image once on the host:
+
+```bash
+docker build -t 9router/agy-gateway:1.5.9 docker/agy-gateway
+```
+
+Then open **Providers → Antigravity CLI → Create container**. Each account keeps its login in a named `/data` volume, can use its own proxy pool, and defaults to 256m RAM / 1 CPU (editable in **Edit**). The **Test** button performs a real completion; **Disable/Enable** controls account rotation. Built-in shell/file/web tools are denied inside the container; client tools are bridged through MCP.
+
+> Security: mounting `/var/run/docker.sock` gives UltraRouter control of the host Docker daemon. Only run this on a trusted host.
+
+
 
 ```bash
 -v "$HOME/.9router:/app/data" \
@@ -66,7 +94,7 @@ docker run -d \
 
 ## Optional Headroom sidecar
 
-The 9Router image does not bundle Python or Headroom. To use Headroom in Docker, run it as a separate service and point 9Router at that proxy:
+The UltraRouter image does not bundle Python or Headroom. To use Headroom in Docker, run it as a separate service and point UltraRouter at that proxy:
 
 ```yaml
 services:
