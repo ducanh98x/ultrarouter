@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./images/9router.png?1" alt="UltraRouter Dashboard" width="800"/>
+  <img src="./images/ultrarouter.png?1" alt="UltraRouter Dashboard" width="800"/>
   
   # UltraRouter - FREE AI Router & Token Saver
   
@@ -97,7 +97,7 @@ Claude Code/Codex/OpenClaw/Cursor/Cline Settings:
 
 **Alternative: run from source (this repository):**
 
-This repository package is private (`9router-app`), so source/Docker execution is the expected local development path.
+This repository package is private (`ultrarouter-app`), so source/Docker execution is the expected local development path.
 
 ```bash
 cp .env.example .env
@@ -1177,7 +1177,7 @@ Cost: $0 forever (+ 20-40% token savings via RTK)!
 ```
 Settings → Models → Advanced:
   OpenAI API Base URL: http://localhost:20128/v1
-  OpenAI API Key: [from 9router dashboard]
+  OpenAI API Key: [from UltraRouter dashboard]
   Model: cc/claude-opus-4-7
 ```
 
@@ -1190,7 +1190,7 @@ Edit `~/.claude/config.json`:
 ```json
 {
   "anthropic_api_base": "http://localhost:20128/v1",
-  "anthropic_api_key": "your-9router-api-key"
+  "anthropic_api_key": "your-ultrarouter-api-key"
 }
 ```
 
@@ -1198,7 +1198,7 @@ Edit `~/.claude/config.json`:
 
 ```bash
 export OPENAI_BASE_URL="http://localhost:20128"
-export OPENAI_API_KEY="your-9router-api-key"
+export OPENAI_API_KEY="your-ultrarouter-api-key"
 
 codex "your prompt"
 ```
@@ -1218,15 +1218,15 @@ Dashboard → CLI Tools → OpenClaw → Select Model → Apply
   "agents": {
     "defaults": {
       "model": {
-        "primary": "9router/kr/claude-sonnet-4.5"
+        "primary": "ultrarouter/kr/claude-sonnet-4.5"
       }
     }
   },
   "models": {
     "providers": {
-      "9router": {
+      "ultrarouter": {
         "baseUrl": "http://127.0.0.1:20128/v1",
-        "apiKey": "sk_9router",
+        "apiKey": "sk_ultrarouter",
         "api": "openai-completions",
         "models": [
           {
@@ -1261,14 +1261,14 @@ Model: cc/claude-opus-4-7
 ```bash
 # Clone and install
 git clone https://github.com/ducanh98x/ultrarouter.git
-cd 9router
+cd ultrarouter
 npm install
 npm run build
 
 # Configure
 export JWT_SECRET="your-secure-secret-change-this"
 export INITIAL_PASSWORD="your-password"
-export DATA_DIR="/var/lib/9router"
+export DATA_DIR="/var/lib/ultrarouter"
 export PORT="20128"
 export HOSTNAME="0.0.0.0"
 export NODE_ENV="production"
@@ -1282,39 +1282,37 @@ npm run start
 
 # Or use PM2
 npm install -g pm2
-pm2 start npm --name 9router -- start
+pm2 start npm --name ultrarouter -- start
 pm2 save
 pm2 startup
 ```
 
 ### Docker
 
-Published images (multi-platform `linux/amd64` + `linux/arm64`):
-
-- Docker Hub: [`decolua/9router`](https://hub.docker.com/r/decolua/9router)
-- GHCR: [`ghcr.io/decolua/9router`](https://github.com/decolua/9router/pkgs/container/9router)
-
-**Quick start (use published image):**
+Build the image from this repo (release tags can also publish to GHCR):
 
 ```bash
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter
+docker build -t ultrarouter .
 docker run -d \
-  --name 9router \
+  --name ultrarouter \
   -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" \
+  -v "$HOME/.ultrarouter:/app/data" \
   -e DATA_DIR=/app/data \
-  decolua/9router:latest
+  ultrarouter:latest
 ```
+
+If a GHCR release exists, you can use `ghcr.io/ducanh98x/ultrarouter:latest` instead.
 
 → Open http://localhost:20128
 
 **Build from source (dev):**
 
 ```bash
-git clone https://github.com/ducanh98x/ultrarouter.git
-cd 9router/app
-docker build -t 9router .
-docker run -d --name 9router -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" -e DATA_DIR=/app/data 9router
+docker build -t ultrarouter .
+docker run -d --name ultrarouter -p 20128:20128 \
+  -v "$HOME/.ultrarouter:/app/data" -e DATA_DIR=/app/data ultrarouter
 ```
 
 **Container defaults:**
@@ -1325,21 +1323,21 @@ docker run -d --name 9router -p 20128:20128 \
 **Useful commands:**
 
 ```bash
-docker logs -f 9router
-docker restart 9router
-docker stop 9router && docker rm 9router
-docker pull decolua/9router:latest   # update to latest
+docker logs -f ultrarouter
+docker restart ultrarouter
+docker stop ultrarouter && docker rm ultrarouter
+git pull && docker build -t ultrarouter .   # update to latest
 ```
 
-**Data persistence:** `$HOME/.9router/db/data.sqlite` on host ↔ `/app/data/db/data.sqlite` in container.
+**Data persistence:** `$HOME/.ultrarouter/db/data.sqlite` on host ↔ `/app/data/db/data.sqlite` in container.
 
 ### Environment Variables
 
 | Variable                                             | Default                                  | Description                                                                         |
 | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| `JWT_SECRET`                                         | Auto-generated (`~/.9router/jwt-secret`) | JWT signing secret for dashboard auth cookie (override to share across instances)   |
+| `JWT_SECRET`                                         | Auto-generated (`~/.ultrarouter/jwt-secret`) | JWT signing secret for dashboard auth cookie (override to share across instances)   |
 | `INITIAL_PASSWORD`                                   | `123456`                                 | First login password when no saved hash exists                                      |
-| `DATA_DIR`                                           | `~/.9router`                             | Main app data location (SQLite at `$DATA_DIR/db/data.sqlite`)                       |
+| `DATA_DIR`                                           | `~/.ultrarouter`                             | Main app data location (SQLite at `$DATA_DIR/db/data.sqlite`)                       |
 | `PORT`                                               | framework default                        | Service port (`20128` in examples)                                                  |
 | `HOSTNAME`                                           | framework default                        | Bind host (Docker defaults to `0.0.0.0`)                                            |
 | `NODE_ENV`                                           | runtime default                          | Set `production` for deploy                                                         |
@@ -1367,7 +1365,7 @@ Notes:
 - Main app state: `${DATA_DIR}/db/data.sqlite` (SQLite — providers, combos, aliases, keys, settings, usage history)
 - Auto backups: `${DATA_DIR}/db/backups/`
 - Optional request/translator logs: `<repo>/logs/...` when `ENABLE_REQUEST_LOGS=true`
-- Both `${DATA_DIR}` and `~/.9router` resolve to the same location in a Docker container — the symlink `/root/.9router -> /app/data` is created at build time.
+- Both `${DATA_DIR}` and `~/.ultrarouter` resolve to the same location in a Docker container — the symlink `/root/.ultrarouter -> /app/data` is created at build time.
 
 </details>
 
@@ -1529,7 +1527,7 @@ Authorization: Bearer your-api-key
 
 ## 📧 Support
 
-- **Website**: [9router.com](https://9router.com)
+- **Website**: [github.com/ducanh98x/ultrarouter](https://github.com/ducanh98x/ultrarouter)
 - **GitHub**: [github.com/ducanh98x/ultrarouter](https://github.com/ducanh98x/ultrarouter)
 - **Issues**: [github.com/ducanh98x/ultrarouter/issues](https://github.com/ducanh98x/ultrarouter/issues)
 
@@ -1545,7 +1543,7 @@ Thanks to all contributors who helped make UltraRouter better!
 
 ## 📊 Star Chart
 
-[![Star Chart](https://starchart.cc/decolua/9router.svg?variant=adaptive)](https://starchart.cc/decolua/9router)
+[![Star Chart](https://starchart.cc/ducanh98x/ultrarouter.svg?variant=adaptive)](https://starchart.cc/ducanh98x/ultrarouter)
 
 ## 🔀 Forks
 

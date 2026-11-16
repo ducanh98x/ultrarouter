@@ -1,7 +1,7 @@
 /**
  * Minimal Docker Engine API client.
  *
- * 9router runs directly on the host, so it talks to the local daemon over the
+ * ultrarouter runs directly on the host, so it talks to the local daemon over the
  * unix socket (`/var/run/docker.sock`) or, on Windows dev machines, the named
  * pipe. `DOCKER_HOST` overrides both (unix://, npipe://, tcp://).
  *

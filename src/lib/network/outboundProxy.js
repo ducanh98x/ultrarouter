@@ -5,6 +5,25 @@ function normalizeString(value) {
 
 const ALLOWED_PROXY_SCHEMES = ["http:", "https:", "socks5:", "socks4:", "socks5h:", "socks4a:"];
 
+// Env names changed with the UltraRouter rebrand; keep reading the old managed
+// markers so an in-place upgrade can still clear the values it wrote before.
+const LEGACY_PROXY_MANAGED = "NINE_ROUTER_PROXY_MANAGED";
+const LEGACY_PROXY_URL = "NINE_ROUTER_PROXY_URL";
+const LEGACY_NO_PROXY = "NINE_ROUTER_NO_PROXY";
+
+function isManaged() {
+  return process.env.ULTRAROUTER_PROXY_MANAGED === "1" || process.env[LEGACY_PROXY_MANAGED] === "1";
+}
+
+function clearManagedVars() {
+  delete process.env.ULTRAROUTER_PROXY_MANAGED;
+  delete process.env.ULTRAROUTER_PROXY_URL;
+  delete process.env.ULTRAROUTER_NO_PROXY;
+  delete process.env[LEGACY_PROXY_MANAGED];
+  delete process.env[LEGACY_PROXY_URL];
+  delete process.env[LEGACY_NO_PROXY];
+}
+
 function validateProxyUrl(url) {
   if (!url) return null;
   if (/[\n\r`$]/.test(url)) return null;
@@ -27,14 +46,12 @@ export function applyOutboundProxyEnv(
 
   // If disabled, only clear env vars we previously managed.
   if (!enabled) {
-    if (process.env.NINE_ROUTER_PROXY_MANAGED === "1") {
+    if (isManaged()) {
       delete process.env.HTTP_PROXY;
       delete process.env.HTTPS_PROXY;
       delete process.env.ALL_PROXY;
       delete process.env.NO_PROXY;
-      delete process.env.NINE_ROUTER_PROXY_MANAGED;
-      delete process.env.NINE_ROUTER_PROXY_URL;
-      delete process.env.NINE_ROUTER_NO_PROXY;
+      clearManagedVars();
     }
     return;
   }
@@ -43,7 +60,7 @@ export function applyOutboundProxyEnv(
   // - If values are provided, write them and mark as managed
   // - If values are empty, do not touch externally-provided env,
   //   but do clear values we previously managed.
-  const wasManaged = process.env.NINE_ROUTER_PROXY_MANAGED === "1";
+  const wasManaged = isManaged();
   let managed = false;
 
   if (wasManaged) {
@@ -51,11 +68,11 @@ export function applyOutboundProxyEnv(
       delete process.env.HTTP_PROXY;
       delete process.env.HTTPS_PROXY;
       delete process.env.ALL_PROXY;
-      delete process.env.NINE_ROUTER_PROXY_URL;
+      delete process.env.ULTRAROUTER_PROXY_URL;
     }
     if (!noProxy) {
       delete process.env.NO_PROXY;
-      delete process.env.NINE_ROUTER_NO_PROXY;
+      delete process.env.ULTRAROUTER_NO_PROXY;
     }
   }
 
@@ -65,21 +82,22 @@ export function applyOutboundProxyEnv(
       process.env.HTTP_PROXY = validated;
       process.env.HTTPS_PROXY = validated;
       process.env.ALL_PROXY = validated;
-      process.env.NINE_ROUTER_PROXY_URL = validated;
+      process.env.ULTRAROUTER_PROXY_URL = validated;
       managed = true;
     }
   }
 
   if (noProxy) {
     process.env.NO_PROXY = noProxy;
-    process.env.NINE_ROUTER_NO_PROXY = noProxy;
+    process.env.ULTRAROUTER_NO_PROXY = noProxy;
     managed = true;
   }
 
   if (managed) {
-    process.env.NINE_ROUTER_PROXY_MANAGED = "1";
+    process.env.ULTRAROUTER_PROXY_MANAGED = "1";
   } else if (wasManaged) {
     // If we previously managed env but now cleared everything, drop the marker.
-    delete process.env.NINE_ROUTER_PROXY_MANAGED;
+    delete process.env.ULTRAROUTER_PROXY_MANAGED;
+    delete process.env[LEGACY_PROXY_MANAGED];
   }
 }

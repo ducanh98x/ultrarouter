@@ -41,7 +41,7 @@ beforeAll(() => {
   const runtimeDir = path.join(dataDir, "runtime");
   const pkgDir = path.join(runtimeDir, "node_modules", PKG);
   mkdirSync(pkgDir, { recursive: true });
-  writeFileSync(path.join(runtimeDir, "package.json"), JSON.stringify({ name: "9router-runtime", private: true }));
+  writeFileSync(path.join(runtimeDir, "package.json"), JSON.stringify({ name: "ultrarouter-runtime", private: true }));
   // Same shape as playwright-core: import condition listed before require.
   writeFileSync(
     path.join(pkgDir, "package.json"),

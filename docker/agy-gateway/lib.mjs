@@ -63,7 +63,7 @@ export function buildPrompt(messages = [], { preamble = DEFAULT_PREAMBLE } = {})
   return [preamble, ...system, turns.join("\n\n")].filter(Boolean).join("\n\n").trim();
 }
 
-const MCP_SERVER_NAME = process.env.AGY_MCP_NAME || "9router";
+const MCP_SERVER_NAME = process.env.AGY_MCP_NAME || "ultrarouter";
 
 // The CLI's own tools (shell/files/web) must never run inside the gateway
 // container. Only the per-request MCP bridge is allowed; the client executes

@@ -1,8 +1,9 @@
-export const GROK_MAIN_MODEL_SLOT = "9router";
+export const GROK_MAIN_MODEL_SLOT = "ultrarouter";
+const LEGACY_MAIN_MODEL_SLOT = "9router";
 export const GROK_BUILTIN_DEFAULT = "grok-build";
 export const GROK_SUBAGENT_TYPES = ["general-purpose", "explore", "plan"];
 
-const UNSET_SENTINEL = "__9router_unset__";
+const UNSET_SENTINEL = "__ultrarouter_unset__";
 const MODELS_SECTION = "models";
 const SUBAGENT_MODELS_SECTION = "subagents.models";
 
@@ -17,10 +18,10 @@ const sectionRegExp = (section) =>
 
 const modelSlot = (type) => `${GROK_MAIN_MODEL_SLOT}-${type}`;
 
-const previousDefaultRegExp = /^# 9router-prev-default = "([^"]*)"[ \t]*\r?\n?/m;
+const previousDefaultRegExp = /^# ultrarouter-prev-default = "([^"]*)"[ \t]*\r?\n?/m;
 const previousSubagentRegExp = (type) =>
   new RegExp(
-    `^# 9router-prev-subagent-${escapeRegExp(type)} = "([^"]*)"[ \\t]*\\r?\\n?`,
+    `^# ultrarouter-prev-subagent-${escapeRegExp(type)} = "([^"]*)"[ \\t]*\\r?\\n?`,
     "m",
   );
 
@@ -97,7 +98,7 @@ function buildModelSection({ slot, model, baseUrl, apiKey, contextWindow, name }
     `model = ${tomlString(model)}`,
     `base_url = ${tomlString(baseUrl)}`,
     `name = ${tomlString(name)}`,
-    `description = ${tomlString("Routed via 9Router gateway")}`,
+    `description = ${tomlString("Routed via UltraRouter gateway")}`,
     `api_backend = "chat_completions"`,
   ];
   if (apiKey) lines.push(`api_key = ${tomlString(apiKey)}`);
@@ -131,14 +132,15 @@ function insertMarker(toml, marker) {
 function rememberPreviousDefault(toml) {
   if (previousDefaultRegExp.test(toml)) return toml;
   const current = getSectionField(toml, MODELS_SECTION, "default");
-  if (!current || current === GROK_MAIN_MODEL_SLOT) return toml;
-  return insertMarker(toml, `# 9router-prev-default = ${tomlString(current)}\n`);
+  if (!current || current === GROK_MAIN_MODEL_SLOT || current === LEGACY_MAIN_MODEL_SLOT) return toml;
+  return insertMarker(toml, `# ultrarouter-prev-default = ${tomlString(current)}\n`);
 }
 
 function restorePreviousDefault(toml) {
   const previous = toml.match(previousDefaultRegExp)?.[1] || GROK_BUILTIN_DEFAULT;
   let next = toml.replace(previousDefaultRegExp, "");
-  if (getSectionField(next, MODELS_SECTION, "default") === GROK_MAIN_MODEL_SLOT) {
+  if (getSectionField(next, MODELS_SECTION, "default") === GROK_MAIN_MODEL_SLOT
+    || getSectionField(next, MODELS_SECTION, "default") === LEGACY_MAIN_MODEL_SLOT) {
     next = setSectionField(next, MODELS_SECTION, "default", previous);
   }
   return next;
@@ -148,10 +150,10 @@ function rememberPreviousSubagent(toml, type) {
   const regexp = previousSubagentRegExp(type);
   if (regexp.test(toml)) return toml;
   const current = getSectionField(toml, SUBAGENT_MODELS_SECTION, type);
-  const previous = current == null ? UNSET_SENTINEL : current;
+  const previous = current == null || current.startsWith(`${LEGACY_MAIN_MODEL_SLOT}-`) ? UNSET_SENTINEL : current;
   return insertMarker(
     toml,
-    `# 9router-prev-subagent-${type} = ${tomlString(previous)}\n`,
+    `# ultrarouter-prev-subagent-${type} = ${tomlString(previous)}\n`,
   );
 }
 
@@ -180,7 +182,7 @@ export function parseGrokBuildConfig(toml) {
   }
 
   return {
-    model: parseModelSection(toml, GROK_MAIN_MODEL_SLOT),
+    model: parseModelSection(toml, GROK_MAIN_MODEL_SLOT) || parseModelSection(toml, LEGACY_MAIN_MODEL_SLOT),
     default: getSectionField(toml, MODELS_SECTION, "default"),
     subagentModels,
     subagentMappings,
@@ -202,9 +204,11 @@ export function applyGrokBuildConfig(
     baseUrl,
     apiKey,
     contextWindow,
-    name: "9Router",
+    name: "UltraRouter",
   });
   next = setSectionField(next, MODELS_SECTION, "default", GROK_MAIN_MODEL_SLOT);
+  // Drop the pre-rebrand model block so Grok does not keep two UltraRouter slots.
+  next = removeModelSection(next, LEGACY_MAIN_MODEL_SLOT);
 
   if (subagentModels && typeof subagentModels === "object") {
     for (const type of GROK_SUBAGENT_TYPES) {
@@ -218,7 +222,7 @@ export function applyGrokBuildConfig(
           baseUrl,
           apiKey,
           contextWindow: selected.contextWindow,
-          name: `9Router ${type}`,
+          name: `UltraRouter ${type}`,
         });
         next = setSectionField(next, SUBAGENT_MODELS_SECTION, type, slot);
       } else {
@@ -238,6 +242,7 @@ export function resetGrokBuildConfig(toml) {
     next = removeModelSection(next, modelSlot(type));
   }
   next = removeModelSection(next, GROK_MAIN_MODEL_SLOT);
+  next = removeModelSection(next, LEGACY_MAIN_MODEL_SLOT);
   next = restorePreviousDefault(next);
   return next.replace(/\n{3,}/g, "\n\n");
 }

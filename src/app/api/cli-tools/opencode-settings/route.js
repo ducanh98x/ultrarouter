@@ -21,7 +21,7 @@ const ALIAS_TO_PROVIDER_ID = {
   ...ALIAS_TO_ID,
 };
 
-// opencode "variants" built from the levels 9Router itself offers for a model
+// opencode "variants" built from the levels UltraRouter itself offers for a model
 // ("alias/model" → same set as the dashboard picker). Returns null when the
 // model has no reasoning levels, so nothing is written for it.
 const buildEffortVariants = (fullModelId) => {
@@ -69,10 +69,27 @@ const readConfig = async () => {
   }
 };
 
-const has9RouterConfig = (config) => {
+const hasUltraRouterConfig = (config) => {
   if (!config?.provider) return false;
-  return !!config.provider["9router"];
+  return !!config.provider["ultrarouter"] || !!config.provider["9router"];
 };
+
+// Migrate a pre-rebrand provider entry in memory. Callers persist the config
+// after applying changes, so old keys disappear on the next save.
+function migrateLegacyProvider(config) {
+  if (!config) return config;
+  if (!config.provider) config.provider = {};
+  if (!config.provider["ultrarouter"] && config.provider["9router"]) {
+    config.provider["ultrarouter"] = config.provider["9router"];
+  }
+  delete config.provider["9router"];
+  const strip = (value) => typeof value === "string" && value.startsWith("9router/")
+    ? `ultrarouter/${value.slice("9router/".length)}`
+    : value;
+  config.model = strip(config.model);
+  if (config.agent?.explorer?.model) config.agent.explorer.model = strip(config.agent.explorer.model);
+  return config;
+}
 
 // GET - Check opencode CLI and read current settings
 export async function GET() {
@@ -88,17 +105,21 @@ export async function GET() {
     }
 
     const config = await readConfig();
-    const providerConfig = config?.provider?.["9router"];
+    const providerConfig = config?.provider?.["ultrarouter"] || config?.provider?.["9router"];
     const modelMap = providerConfig?.models || {};
 
     return NextResponse.json({
       installed: true,
       config,
-      has9Router: has9RouterConfig(config),
+      hasUltraRouter: hasUltraRouterConfig(config),
       configPath: getConfigPath(),
         opencode: {
           models: Object.keys(modelMap),
-          activeModel: config?.model?.startsWith("9router/") ? config.model.replace(/^9router\//, "") : null,
+          activeModel: config?.model?.startsWith("ultrarouter/")
+            ? config.model.replace(/^ultrarouter\//, "")
+            : config?.model?.startsWith("9router/")
+              ? config.model.replace(/^9router\//, "")
+              : null,
           baseURL: providerConfig?.options?.baseURL || null,
         },
     });
@@ -108,7 +129,7 @@ export async function GET() {
   }
 }
 
-// POST - Apply 9Router as openai-compatible provider (multi-model support)
+// POST - Apply UltraRouter as openai-compatible provider (multi-model support)
 export async function POST(request) {
   try {
     const { baseUrl, apiKey, model, models, activeModel, subagentModel } = await request.json();
@@ -132,6 +153,8 @@ export async function POST(request) {
       config = JSON.parse(existing);
     } catch { /* No existing config */ }
 
+    config = migrateLegacyProvider(config);
+
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
     const keyToUse = await resolveCliApiKey(apiKey);
     const effectiveSubagentModel = subagentModel || modelsArray[0];
@@ -139,8 +162,8 @@ export async function POST(request) {
     // Ensure provider object
     if (!config.provider) config.provider = {};
 
-    // Preserve any existing 9router provider entry and its models
-    const existingProvider = config.provider["9router"] || { npm: "@ai-sdk/openai-compatible", options: {}, models: {} };
+    // Preserve any existing ultrarouter provider entry and its models
+    const existingProvider = config.provider["ultrarouter"] || config.provider["9router"] || { npm: "@ai-sdk/openai-compatible", options: {}, models: {} };
 
     // Merge options (overwrite baseURL/apiKey)
     existingProvider.options = {
@@ -163,7 +186,7 @@ export async function POST(request) {
     }
 
     // Save merged provider back
-    config.provider["9router"] = existingProvider;
+    config.provider["ultrarouter"] = existingProvider;
 
     // Set the active model: prefer explicit activeModel, else first of modelsArray
     // If activeModel is explicitly empty string, clear the model
@@ -172,7 +195,7 @@ export async function POST(request) {
     } else {
       const finalActive = activeModel || modelsArray[0];
       if (finalActive) {
-        config.model = `9router/${finalActive}`;
+        config.model = `ultrarouter/${finalActive}`;
       }
     }
 
@@ -181,7 +204,7 @@ export async function POST(request) {
     config.agent.explorer = {
       description: "Fast explorer subagent for codebase exploration",
       mode: "subagent",
-      model: `9router/${effectiveSubagentModel}`,
+      model: `ultrarouter/${effectiveSubagentModel}`,
     };
 
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
@@ -216,7 +239,7 @@ export async function PATCH(request) {
 
     if (clearActiveModel === true) {
       // Clear active model but keep models in the list
-      if (config.model?.startsWith("9router/")) {
+      if (config.model?.startsWith("ultrarouter/")) {
         config.model = "";
       }
     }
@@ -233,7 +256,7 @@ export async function PATCH(request) {
   }
 }
 
-// DELETE - Remove 9Router provider or specific models from config
+// DELETE - Remove UltraRouter provider or specific models from config
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -251,27 +274,29 @@ export async function DELETE(request) {
       throw error;
     }
 
+    config = migrateLegacyProvider(config);
+
     // If specific model provided, remove just that model
-    if (modelToRemove && config.provider?.["9router"]?.models) {
-      delete config.provider["9router"].models[modelToRemove];
+    if (modelToRemove && config.provider?.["ultrarouter"]?.models) {
+      delete config.provider["ultrarouter"].models[modelToRemove];
       
       // If no models left, remove the provider
-      if (Object.keys(config.provider["9router"].models).length === 0) {
-        delete config.provider["9router"];
-        if (config.model?.startsWith("9router/")) delete config.model;
-      } else if (config.model === `9router/${modelToRemove}`) {
+      if (Object.keys(config.provider["ultrarouter"].models).length === 0) {
+        delete config.provider["ultrarouter"];
+        if (config.model?.startsWith("ultrarouter/")) delete config.model;
+      } else if (config.model === `ultrarouter/${modelToRemove}`) {
         // If removed model was active, switch to first remaining model
-        const remainingModels = Object.keys(config.provider["9router"].models);
-        config.model = `9router/${remainingModels[0]}`;
+        const remainingModels = Object.keys(config.provider["ultrarouter"].models);
+        config.model = `ultrarouter/${remainingModels[0]}`;
       }
     } else {
-      // No specific model - remove entire 9router provider
-      if (config.provider) delete config.provider["9router"];
-      if (config.model?.startsWith("9router/")) delete config.model;
+      // No specific model - remove entire ultrarouter provider
+      if (config.provider) delete config.provider["ultrarouter"];
+      if (config.model?.startsWith("ultrarouter/")) delete config.model;
     }
 
     // Remove subagent configuration
-    if (config.agent?.explorer?.model?.startsWith("9router/")) {
+    if (config.agent?.explorer?.model?.startsWith("ultrarouter/")) {
       delete config.agent.explorer;
       // Clean up empty agent object
       if (Object.keys(config.agent).length === 0) delete config.agent;
@@ -281,7 +306,7 @@ export async function DELETE(request) {
 
     return NextResponse.json({
       success: true,
-      message: modelToRemove ? `Model "${modelToRemove}" removed` : "9Router settings removed from OpenCode",
+      message: modelToRemove ? `Model "${modelToRemove}" removed` : "UltraRouter settings removed from OpenCode",
     });
   } catch (error) {
     console.log("Error resetting opencode settings:", error);

@@ -1,12 +1,12 @@
 # Frequently Asked Questions
 
-Common questions about 9Router.
+Common questions about UltraRouter.
 
 ---
 
-## What is 9Router?
+## What is UltraRouter?
 
-**9Router is an AI model router that maximizes your subscription value and minimizes costs.**
+**UltraRouter is an AI model router that maximizes your subscription value and minimizes costs.**
 
 It intelligently routes requests across multiple AI providers using a 3-tier fallback system:
 1. **Subscription tier** - Maximize Claude Code, Codex, Gemini quotas you already pay for
@@ -23,7 +23,7 @@ It intelligently routes requests across multiple AI providers using a 3-tier fal
 
 ## How does pricing work?
 
-**9Router uses a 3-tier pricing strategy:**
+**UltraRouter uses a 3-tier pricing strategy:**
 
 ### Tier 1: Subscription (Maximize First)
 - **Claude Code** (Pro/Max): $20-100/month - 5-hour + weekly quota
@@ -50,9 +50,9 @@ It intelligently routes requests across multiple AI providers using a 3-tier fal
 
 ---
 
-## Is 9Router free?
+## Is UltraRouter free?
 
-**Yes, 9Router itself is 100% free and open source.**
+**Yes, UltraRouter itself is 100% free and open source.**
 
 **Free tier providers available:**
 - **Gemini CLI** - 180K completions/month (FREE Google account)
@@ -96,7 +96,7 @@ See [providers documentation](providers/subscription.md) for details.
 
 ## Can I use multiple providers?
 
-**Yes! This is 9Router's core feature.**
+**Yes! This is UltraRouter's core feature.**
 
 **Combos allow you to chain multiple providers with automatic fallback:**
 
@@ -129,7 +129,7 @@ See [combos documentation](features/combos.md) for examples.
 
 ## How does quota tracking work?
 
-**9Router tracks quota in real-time for all providers:**
+**UltraRouter tracks quota in real-time for all providers:**
 
 **Features:**
 - **Token consumption** - Input/output tokens per request
@@ -154,13 +154,13 @@ See [quota tracking documentation](features/quota-tracking.md) for details.
 
 ---
 
-## Does 9Router work with Cursor?
+## Does UltraRouter work with Cursor?
 
 **Yes, but Cursor requires a cloud endpoint.**
 
 **Problem:** Cursor IDE doesn't support localhost endpoints.
 
-**Solution:** Use 9Router cloud deployment:
+**Solution:** Use UltraRouter cloud deployment:
 
 ```
 Cursor Settings → Models → Advanced:
@@ -172,8 +172,8 @@ Cursor Settings → Models → Advanced:
 **Alternative:** Self-host on VPS with public domain:
 ```bash
 # Deploy to VPS
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter/app
 npm install && npm run build
 npm start
 
@@ -192,22 +192,22 @@ See [Cursor integration guide](integration/cursor.md) for details.
 
 ---
 
-## Can I self-host 9Router?
+## Can I self-host UltraRouter?
 
-**Yes! 9Router supports multiple deployment options:**
+**Yes! UltraRouter supports multiple deployment options:**
 
 ### Localhost (Default)
 ```bash
-npm install -g 9router
-9router
+npm install -g ultrarouter
+ultrarouter
 → Dashboard: http://localhost:3000
 → API: http://localhost:20128/v1
 ```
 
 ### VPS/Cloud
 ```bash
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter/app
 npm install && npm run build
 
 export JWT_SECRET="your-secure-secret"
@@ -219,23 +219,23 @@ npm start
 
 ### Docker
 ```bash
-docker build -t 9router .
+docker build -t ultrarouter .
 docker run -d \
   -p 3000:3000 \
   -e JWT_SECRET="your-secret" \
-  -v 9router-data:/app/data \
-  9router
+  -v ultrarouter-data:/app/data \
+  ultrarouter
 ```
 
 ### Cloudflare Workers
 ```bash
-cd 9router/app
+cd ultrarouter/app
 npm run deploy:cloudflare
 ```
 
 **Environment variables:**
 - `JWT_SECRET` - **MUST change in production!**
-- `DATA_DIR` - Database storage path (default: `~/.9router`)
+- `DATA_DIR` - Database storage path (default: `~/.ultrarouter`)
 - `INITIAL_PASSWORD` - Dashboard login (default: `123456`)
 - `NODE_ENV` - Set to `production` for deploy
 
@@ -245,11 +245,11 @@ See [deployment guide](getting-started/installation.md#deployment) for details.
 
 ## Is my data secure?
 
-**Yes, 9Router prioritizes security and privacy:**
+**Yes, UltraRouter prioritizes security and privacy:**
 
 **Local storage:**
-- All data stored locally in `~/.9router` (or custom `DATA_DIR`)
-- No data sent to 9Router servers
+- All data stored locally in `~/.ultrarouter` (or custom `DATA_DIR`)
+- No data sent to UltraRouter servers
 - OAuth tokens encrypted with JWT
 
 **No telemetry:**
@@ -268,31 +268,31 @@ See [deployment guide](getting-started/installation.md#deployment) for details.
 - Enable HTTPS for cloud deployments
 - Rotate API keys regularly
 
-**What 9Router stores:**
+**What UltraRouter stores:**
 - Provider OAuth tokens (encrypted)
 - API keys (encrypted)
 - Usage statistics (local only)
 - Combo configurations
 
-**What 9Router does NOT store:**
+**What UltraRouter does NOT store:**
 - Your prompts or responses
 - Code you generate
 - Personal information
 
 ---
 
-## How do I update 9Router?
+## How do I update UltraRouter?
 
 **Update methods depend on installation type:**
 
 ### Global NPM Install
 ```bash
-npm update -g 9router
+npm update -g ultrarouter
 ```
 
 ### Local Install
 ```bash
-cd 9router/app
+cd ultrarouter/app
 git pull origin main
 npm install
 npm run build
@@ -301,23 +301,23 @@ npm start
 
 ### Docker
 ```bash
-docker pull 9router:latest
-docker stop 9router
-docker rm 9router
+docker pull ultrarouter:latest
+docker stop ultrarouter
+docker rm ultrarouter
 docker run -d \
   -p 3000:3000 \
-  -v 9router-data:/app/data \
-  9router:latest
+  -v ultrarouter-data:/app/data \
+  ultrarouter:latest
 ```
 
 **Check version:**
 ```bash
-9router --version
+ultrarouter --version
 ```
 
 **Breaking changes:**
-- Check [CHANGELOG.md](https://github.com/decolua/9router/blob/main/CHANGELOG.md)
-- Backup `~/.9router` before major updates
+- Check [CHANGELOG.md](https://github.com/ducanh98x/ultrarouter/blob/master/CHANGELOG.md)
+- Backup `~/.ultrarouter` before major updates
 - Review migration guides for major versions
 
 ---
@@ -329,18 +329,18 @@ docker run -d \
 ### Ways to contribute:
 
 1. **Report bugs:**
-   - [GitHub Issues](https://github.com/decolua/9router/issues)
+   - [GitHub Issues](https://github.com/ducanh98x/ultrarouter/issues)
    - Include error logs, steps to reproduce
 
 2. **Request features:**
-   - [GitHub Discussions](https://github.com/decolua/9router/discussions)
+   - [GitHub Discussions](https://github.com/ducanh98x/ultrarouter/discussions)
    - Describe use case and benefits
 
 3. **Submit code:**
    ```bash
    # Fork repo
-   git clone https://github.com/YOUR_USERNAME/9router.git
-   cd 9router
+   git clone https://github.com/YOUR_USERNAME/ultrarouter.git
+   cd ultrarouter
    
    # Create branch
    git checkout -b feature/your-feature
@@ -375,13 +375,13 @@ docker run -d \
 - Update documentation
 - Keep commits atomic and descriptive
 
-See [CONTRIBUTING.md](https://github.com/decolua/9router/blob/main/CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](https://github.com/ducanh98x/ultrarouter/blob/master/CONTRIBUTING.md) for details.
 
 ---
 
 ## Need More Help?
 
 - **Documentation:** [9router.com/docs](https://9router.com/docs)
-- **GitHub:** [github.com/decolua/9router](https://github.com/decolua/9router)
-- **Issues:** [github.com/decolua/9router/issues](https://github.com/decolua/9router/issues)
+- **GitHub:** [github.com/ducanh98x/ultrarouter](https://github.com/ducanh98x/ultrarouter)
+- **Issues:** [github.com/ducanh98x/ultrarouter/issues](https://github.com/ducanh98x/ultrarouter/issues)
 - **Troubleshooting:** [troubleshooting.md](troubleshooting.md)

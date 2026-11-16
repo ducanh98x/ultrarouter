@@ -5,10 +5,27 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-const DATA_DIR = process.env.DATA_DIR
-  || (process.platform === "win32"
-    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router")
-    : path.join(os.homedir(), ".9router"));
+function defaultDataDir(name) {
+  return process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), name)
+    : path.join(os.homedir(), `.${name}`);
+}
+
+function resolveDataDir() {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  const target = defaultDataDir("ultrarouter");
+  const legacy = defaultDataDir("9router");
+  if (!fs.existsSync(target) && fs.existsSync(legacy)) {
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      try { fs.renameSync(legacy, target); }
+      catch { fs.cpSync(legacy, target, { recursive: true, force: false, errorOnExist: false }); }
+    } catch { /* best effort */ }
+  }
+  return target;
+}
+
+const DATA_DIR = resolveDataDir();
 
 const CACHE_FILE = path.join(DATA_DIR, "mitm", "aliases.json");
 

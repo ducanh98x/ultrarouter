@@ -1,6 +1,6 @@
 // The free lane sheds load with 429 "The inference service is overloaded.
 // Please try again later." even after a request passes the TLS gate. The
-// OpenCode CLI retries that transient 429; 9router used to surface it. These
+// OpenCode CLI retries that transient 429; ultrarouter used to surface it. These
 // tests pin the executor-side retry so the CLI gets a response, while a real
 // free-tier quota 429 is still delivered without delay.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

@@ -288,7 +288,7 @@ function resolveConnectionProxyUrl(targetUrl, proxyOptions) {
 // ISP DPI (VN → api.anthropic.com) RSTs Node's default TLS ClientHello curve
 // list; a single curve rewrites the fingerprint enough to pass. Empirically:
 // default agent = ECONNRESET 100%, X25519 = through 100%.
-const TLS_ECDH_CURVE = process.env.NINEROUTER_TLS_ECDH_CURVE || "X25519";
+const TLS_ECDH_CURVE = process.env.ULTRAROUTER_TLS_ECDH_CURVE || "X25519";
 
 // autoSelectFamilyAttemptTimeout = happy eyeballs (RFC 8305): race both address
 // families, fall over in 250ms — replaces the old global ipv4first flag, which fixed

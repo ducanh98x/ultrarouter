@@ -259,7 +259,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       connection = availableConnections[0];
     }
 
-    // The Antigravity CLI container owns its own egress proxy. 9router talks to
+    // The Antigravity CLI container owns its own egress proxy. ultrarouter talks to
     // the loopback wrapper directly, so it must not attach a proxy here — doing
     // so makes every call try the proxy first and stall until it falls back.
     const resolvedProxy = providerId === "antigravity-cli"

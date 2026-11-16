@@ -1,5 +1,5 @@
 /**
- * `9router show [tools…]` — print the 9router settings currently written in
+ * `ultrarouter show [tools…]` — print the ultrarouter settings currently written in
  * each CLI tool's LOCAL config: base URL, (masked) API key and models.
  *
  * Read-only and offline: never contacts a server and never prints a full key.
@@ -51,7 +51,7 @@ async function inspect(tool) {
     record.baseUrl = s.baseUrl || null;
     record.apiKey = s.apiKey ? maskKey(s.apiKey) : null;
     record.models = s.models || {};
-    // `active` is only reported by tools where 9router can be present but not selected.
+    // `active` is only reported by tools where ultrarouter can be present but not selected.
     if (typeof s.active === "boolean") record.active = s.active;
   } catch (err) {
     record.error = err.message;

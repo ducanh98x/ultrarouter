@@ -83,7 +83,7 @@ const createOpenAIModelsConfig = (url) => ({
 const normalizeRoutedNousModels = (data) => normalizeNousModels(data).map((model) => ({
   ...model,
   // Live upstream IDs include a vendor namespace (for example,
-  // stepfun/step-5-preview:free). Prefix the owning 9router provider so Basic
+  // stepfun/step-5-preview:free). Prefix the owning ultrarouter provider so Basic
   // Chat does not parse that namespace as the provider itself.
   id: `nous/${model.id}`,
   upstreamModelId: model.id,
@@ -189,7 +189,7 @@ const PROVIDER_MODELS_CONFIG = {
     parseResponse: (data) => data.data || [],
   },
   // OAuth (sk-ant-oat) token: Bearer + oauth beta header. Live list lets new
-  // Claude models show up without waiting for a 9router release.
+  // Claude models show up without waiting for a ultrarouter release.
   claude: {
     url: "https://api.anthropic.com/v1/models?limit=1000",
     method: "GET",

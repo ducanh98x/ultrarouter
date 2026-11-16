@@ -128,8 +128,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   const upstreamModel = getModelUpstreamId(alias, model, body);
 
-  // Per-request opt-out: client can bypass all token savers via header
-  const tokenSaverEnabled = clientRawRequest?.headers?.[TOKEN_SAVER_HEADER]?.toLowerCase() !== "off";
+  // Per-request opt-out: client can bypass all token savers via header.
+  // Accept the pre-rebrand header so existing clients keep working.
+  const requestHeaders = clientRawRequest?.headers || {};
+  const tokenSaverHeader = requestHeaders[TOKEN_SAVER_HEADER] ?? requestHeaders["x-9router-token-saver"];
+  const tokenSaverEnabled = tokenSaverHeader?.toLowerCase() !== "off";
 
   // Cursor's translator rewrites tool_result into user text, so RTK must run on
   // the source body before translation. Every other pair translates the tool

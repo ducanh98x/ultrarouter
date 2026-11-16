@@ -1,8 +1,8 @@
 /**
- * `9router connect <server-url>` — point local CLI tools (Claude Code, Codex, …) at a
- * REMOTE 9router server. Nothing runs locally: we log in with the dashboard
+ * `ultrarouter connect <server-url>` — point local CLI tools (Claude Code, Codex, …) at a
+ * REMOTE ultrarouter server. Nothing runs locally: we log in with the dashboard
  * password, reuse/create an API key for this machine, then write the tool's
- * settings files (see connectTools.js). Works via `npx 9router connect …` with no global install.
+ * settings files (see connectTools.js). Works via `npx ultrarouter connect …` with no global install.
  *
  * The password and API key are never printed (key is masked).
  */
@@ -25,10 +25,10 @@ Options:
   --tools <list>         Comma-separated tools to configure (prompted if omitted
                          in a terminal; default: claude). Supported:
                          ${TOOL_IDS.join(", ")}, all
-  --password <pw>        Dashboard password (or env NINE_ROUTER_PASSWORD;
+  --password <pw>        Dashboard password (or env ULTRAROUTER_PASSWORD;
                          prompted if omitted — preferred, keeps it out of shell history)
   --save                 After a successful login, save the password for this server
-                         to ~/.9router/connect.env (plain text, mode 600) so later
+                         to ~/.ultrarouter/connect.env (plain text, mode 600) so later
                          runs skip the prompt. Delete that file to forget it.
   --key-name <name>      API key name to reuse/create (default: cli-<hostname>)
   --api-key <key>        Use this API key, skip login + key lookup
@@ -51,7 +51,7 @@ and a non-Claude tool with no model anywhere is skipped. Flags override:
 
 function parseArgs(argv) {
   const opts = {
-    password: process.env.NINE_ROUTER_PASSWORD || null,
+    password: process.env.ULTRAROUTER_PASSWORD || process.env.NINE_ROUTER_PASSWORD || null,
     keyName: `cli-${os.hostname()}`.slice(0, 64),
     apiKey: null,
     models: {},
@@ -97,8 +97,18 @@ function maskKey(key) {
 function savedEnvPath() {
   if (process.env.DATA_DIR) return path.join(process.env.DATA_DIR, "connect.env");
   const base = process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "ultrarouter")
+    : path.join(os.homedir(), ".ultrarouter");
+  const legacy = process.platform === "win32"
     ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router")
     : path.join(os.homedir(), ".9router");
+  if (!fs.existsSync(base) && fs.existsSync(legacy)) {
+    try {
+      fs.mkdirSync(path.dirname(base), { recursive: true });
+      try { fs.renameSync(legacy, base); }
+      catch { fs.cpSync(legacy, base, { recursive: true, force: false, errorOnExist: false }); }
+    } catch { /* best effort */ }
+  }
   return path.join(base, "connect.env");
 }
 
@@ -113,13 +123,15 @@ function loadSavedPassword(server) {
     // rather than crashing the whole command on JSON.parse.
     try { env[m[1]] = JSON.parse(m[2]); } catch { env[m[1]] = m[2]; }
   }
-  return env.NINE_ROUTER_SERVER === server && env.NINE_ROUTER_PASSWORD ? env.NINE_ROUTER_PASSWORD : null;
+  const savedServer = env.ULTRAROUTER_SERVER || env.NINE_ROUTER_SERVER;
+  const savedPassword = env.ULTRAROUTER_PASSWORD || env.NINE_ROUTER_PASSWORD;
+  return savedServer === server && savedPassword ? savedPassword : null;
 }
 
 function savePassword(server, password) {
   const file = savedEnvPath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const body = `NINE_ROUTER_SERVER=${JSON.stringify(server)}\nNINE_ROUTER_PASSWORD=${JSON.stringify(password)}\n`;
+  const body = `ULTRAROUTER_SERVER=${JSON.stringify(server)}\nULTRAROUTER_PASSWORD=${JSON.stringify(password)}\n`;
   fs.writeFileSync(file, body, { mode: 0o600 });
   fs.chmodSync(file, 0o600); // mode only applies on create; tighten a pre-existing file too
   return file;
@@ -130,7 +142,7 @@ class Cancelled extends Error {}
 const prompt = (p) => p.run().catch((err) => { throw err || new Cancelled("Cancelled"); });
 
 async function promptPassword() {
-  if (!process.stdin.isTTY) throw new Error("Password required: pass --password or set NINE_ROUTER_PASSWORD");
+  if (!process.stdin.isTTY) throw new Error("Password required: pass --password or set ULTRAROUTER_PASSWORD");
   const { Password } = require("enquirer");
   return prompt(new Password({ message: "UltraRouter dashboard password" }));
 }
@@ -394,7 +406,7 @@ async function runConnect(argv) {
     }
   }
   for (const [id, m] of Object.entries(toolModels)) if (m) console.log(`   ${id} model: ${m}`);
-  if (tools.some((t) => t.id === "omp")) console.log("   omp models: every server model, listed under 9router in /model");
+  if (tools.some((t) => t.id === "omp")) console.log("   omp models: every server model, listed under the ultrarouter provider in /model");
   console.log(`   Restart the tools to apply. Undo: npx ultrarouter connect --reset --tools ${tools.map((t) => t.id).join(",")}`);
 
   if (opts.printEnv) {

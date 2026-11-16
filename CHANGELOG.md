@@ -12,9 +12,9 @@
 - **Antigravity CLI**: a suspended account is skipped for every model and locked for 24h instead of being retried every 2 minutes; Test clears the state after a successful real completion. Recreate/update no longer flips a suspended account back to active.
 - **Combos**: a member pinned to a banned account now falls over to other accounts of the same provider even when the stored legacy `next-member` value is present. A single-member combo works as long as the provider has another healthy account; `test2` was verified returning 200 through live accounts.
 - **Combos**: all members failing on auth/permission now return the original 401/402/403 response instead of a synthesized 503/empty body, so clients see the real status.
-- **Antigravity CLI**: built-in shell/file/web tools are denied by default (`command`, `read_file`, `write_file`, `read_url`, `execute_url`, `download_url`); only the local MCP `9router` bridge is allowed. The CLI flag is auto-approval only for that bridge, and deny rules still win.
+- **Antigravity CLI**: built-in shell/file/web tools are denied by default (`command`, `read_file`, `write_file`, `read_url`, `execute_url`, `download_url`); only the local MCP `ultrarouter` bridge is allowed. The CLI flag is auto-approval only for that bridge, and deny rules still win.
 - **Combos page**: renders interactive content after hydration to avoid browser-extension attribute injection breaking hydration; the edit modal no longer exposes the legacy `next-member` failover option.
-- **Rebrand**: the fork is now **UltraRouter** — GitHub repo `ducanh98x/ultrarouter`, npm package `ultrarouter`, CLI binary `ultrarouter` (the legacy `9router` binary and `~/.9router` data directory remain as compatibility aliases). The dashboard update check reads the `ultrarouter` npm package and offers `npm i -g ultrarouter@latest --prefer-online`.
+- **Rebrand**: the fork is now **UltraRouter** — GitHub repo `ducanh98x/ultrarouter`, npm package `ultrarouter`, CLI binary `ultrarouter`. The dashboard update check reads the `ultrarouter` npm package and offers `npm i -g ultrarouter@latest --prefer-online`. Existing `~/.9router` data is moved to `~/.ultrarouter` on first run, and the old `9router` binary alias plus legacy provider keys are kept only for compatibility.
 
 # v0.5.119 (2026-11-11)
 
@@ -214,7 +214,7 @@
 - **Antigravity**: add Claude Sonnet 5.5 and Opus 5.5 support with reasoning effort variants, pricing, and family quota routing
 - **Bedrock**: add Amazon Bedrock (`bedrock` and `bedrock-xai`) provider with static keys, AWS SSO profiles, native SigV4 signer, and shared EventStream decoder (#4157)
 - **Hermes**: per-profile configuration across API, Dashboard card, and CLI menu with bulk apply, scoped reset, and auxiliary roles (#4660)
-- **Hermes**: audio transcription via 9router — an "Audio STT" toggle in the card points the profile's `stt.openai.base_url` at `/v1/audio/transcriptions` with an STT-kind model picker (#4763)
+- **Hermes**: audio transcription via UltraRouter — an "Audio STT" toggle in the card points the profile's `stt.openai.base_url` at `/v1/audio/transcriptions` with an STT-kind model picker (#4763)
 - **API Keys**: per-API-key access control — restrict keys to allowed combos and models via interactive modal
 - **ElevenLabs**: add Scribe speech-to-text support (#4537)
 - **Proxy Pools**: add Netlify serverless relay proxy pool with digest-deploy API and dashboard management modal
@@ -249,7 +249,7 @@
 - **GLM**: add Z.ai OAuth login to GLM Coding (dual-auth)
 - **Codex**: add GPT-6.1 Sol; expose 1M context variants for GPT-6 and GPT-5.6; add gpt-daybreak/reserve models and route bare `gpt-5.x`/`gpt-6.x` slugs to codex
 - **Claude**: add Claude Sonnet 5.5 (plus `claude-opus-5.5` models in the Kiro registry)
-- **CLI**: add `connect` command for remote 9Router servers
+- **CLI**: add `connect` command for remote UltraRouter servers
 - **Providers**: per-provider custom header overrides from the registry
 - **Agnes**: seed the 2.5/3.0 model ids in the registry
 - **Usage**: sync `?provider=` URL param with provider filter for bookmarkable deep links (#4395)
@@ -269,7 +269,7 @@
 - **Proxy**: auto-fallback to insecure TLS on self-signed cert errors; hold strictProxy when no proxy resolves
 - **Translator**: strip `errorMessage` and other non-standard schema keywords from Gemini tool schemas; dedupe same-name tools for DeepSeek models (#3333)
 - **Codebuddy**: parse the 6004 rate limit error and extract `resetsAtMs`; forward `recurring` for codebuddy-intl quota packs (#4422)
-- **CLI Tools**: replace `sk_9router` placeholder with first active dashboard API key
+- **CLI Tools**: replace `sk_ultrarouter` placeholder with first active dashboard API key
 - **Dashboard**: exclude hidden providers from usage stats provider list
 - **Capabilities**: add deepseek-v4-1-flash vision alias; add zed to live catalog providers
 
@@ -538,7 +538,7 @@
   13.0.3 ships per-platform prebuilds, `--ignore-scripts` skips the implicit
   node-gyp build); Node < 22 stays on 12.6.2, working installs untouched
 - **CLI tools**: send the API key Codex actually reads —
-  `[model_providers.9router.http_headers]` instead of auth.json (which left
+  `[model_providers.ultrarouter.http_headers]` instead of auth.json (which left
   every request 401 and clobbered an existing ChatGPT login); subagent model
   moved to `agents.default_subagent_model`
 - **OAuth**: refresh Cline tokens with the extension JSON contract
@@ -639,7 +639,7 @@
 ## Features
 - **Providers**: add TokenRouter (300+ models via OpenAI-compatible gateway) with
   exact per-model pricing for 110 models and `reasoning_effort` thinking config
-- **Providers**: add Self-hosted STT / TTS / Embedding — point 9Router at your own
+- **Providers**: add Self-hosted STT / TTS / Embedding — point UltraRouter at your own
   OpenAI-compatible speech and embedding servers (whisper.cpp, faster-whisper,
   Kokoro-FastAPI, llama-server, vLLM, Infinity). Unlike the named cloud providers
   these read `baseUrl` per connection, so one provider can front several machines
@@ -773,7 +773,7 @@
 - **CLI tools**: Grok Build setup — choose separate main/general-purpose/explore/plan models and preserve each model's context window
 - **GitHub Copilot**: route Claude models through Copilot's native `/v1/messages`
 - **Kiro**: add GPT-5.6 model family (#2596)
-- **RTK**: `X-9Router-Token-Saver` header to bypass token savers per request
+- **RTK**: `X-UltraRouter-Token-Saver` header to bypass token savers per request
 - **Providers**: quota visibility settings
 - **Translator**: drop temperature for all Claude models
 - **i18n**: Thai (th) + Persian (fa) translations / README
@@ -1023,4 +1023,4 @@
 - Dashboard: show provider node name instead of connection name in topology (#1770) + show explicit `kind="llm"` combos on combos page (#1684)
 
 ## Docs
-- README: add Indonesian 9Router tutorial video (#1709)
+- README: add Indonesian UltraRouter tutorial video (#1709)

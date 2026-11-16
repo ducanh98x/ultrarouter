@@ -77,7 +77,7 @@ const { ensureSqliteRuntime, buildEnvWithRuntime } = require("./hooks/sqliteRunt
 const { ensureTrayRuntime } = require("./hooks/trayRuntime");
 const args = process.argv.slice(2);
 
-// Subcommands (`9router xai video …`) run against an already-running gateway
+// Subcommands (`ultrarouter xai video …`) run against an already-running gateway
 // and bypass the launcher flow (no runtime self-heal, no server spawn).
 if (args[0] === "xai" && args[1] === "video") {
   const { run } = require("./src/cli/commands/xaiVideo");
@@ -90,9 +90,9 @@ if (args[0] === "xai" && args[1] === "video") {
   return;
 }
 
-// `9router connect <url>` configures local CLI tools against a remote server, and
-// `9router show` prints what they're currently set to — no local server, no
-// runtime deps. Usable via `npx 9router …`.
+// `ultrarouter connect <url>` configures local CLI tools against a remote server, and
+// `ultrarouter show` prints what they're currently set to — no local server, no
+// runtime deps. Usable via `npx ultrarouter …`.
 if (args[0] === "connect" || args[0] === "show") {
   const { run } = require(args[0] === "show" ? "./src/cli/commands/show" : "./src/cli/commands/connect");
   run(args.slice(1))
@@ -104,7 +104,7 @@ if (args[0] === "connect" || args[0] === "show") {
   return;
 }
 
-// Self-heal SQLite runtime deps (sql.js + better-sqlite3) into ~/.9router/runtime
+// Self-heal SQLite runtime deps (sql.js + better-sqlite3) into ~/.ultrarouter/runtime
 // so the server can resolve them via NODE_PATH. Best-effort — sql.js is required,
 // better-sqlite3 is optional. Logs to stderr only on failure.
 try { ensureSqliteRuntime({ silent: true }); } catch {}
@@ -141,7 +141,7 @@ const PORT_RELEASE_WAIT_MS = 3000;
 // Identifiers for killAllAppProcesses - only kill UltraRouter specifically
 const PROCESS_IDENTIFIERS = [
   'ultrarouter', // current package name
-  '9router'  // legacy package name / compatibility alias - avoid killing other apps
+  'ultrarouter'  // legacy package name / compatibility alias - avoid killing other apps
 ];
 
 // Parse arguments
@@ -220,9 +220,20 @@ function compareVersions(a, b) {
 
 // Get app data dir (matches app/src/lib/dataDir.js convention)
 function getAppDataDir() {
-  return process.platform === "win32"
+  const target = process.platform === "win32"
+    ? path.join(process.env.APPDATA || "", "ultrarouter")
+    : path.join(os.homedir(), ".ultrarouter");
+  const legacy = process.platform === "win32"
     ? path.join(process.env.APPDATA || "", "9router")
     : path.join(os.homedir(), ".9router");
+  if (!fs.existsSync(target) && fs.existsSync(legacy)) {
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      try { fs.renameSync(legacy, target); }
+      catch { fs.cpSync(legacy, target, { recursive: true, force: false, errorOnExist: false }); }
+    } catch { /* best effort */ }
+  }
+  return target;
 }
 
 // Kill PID from file (best-effort, removes file after)
@@ -281,7 +292,7 @@ function killCloudflaredByAppPort(appPort) {
   });
 }
 
-// Kill all 9router processes (full machine-wide scan — slow on Windows, so the
+// Kill all ultrarouter processes (full machine-wide scan — slow on Windows, so the
 // launcher only uses it as a fallback; see stopPreviousInstance).
 function killAllAppProcesses() {
   return new Promise((resolve) => {
@@ -300,11 +311,11 @@ function killAllAppProcesses() {
           });
           const lines = output.split("\n").slice(1).filter(l => l.trim());
           lines.forEach(line => {
-            // Whitelist: real node process running ultrarouter/9router cli.js, or next-server.
+            // Whitelist: real node process running ultrarouter/ultrarouter cli.js, or next-server.
             // Avoids killing editors/grep/strace/cursor that just have the package name in cmdline.
             const cmd = line.toLowerCase();
             const isAppProcess =
-              (cmd.includes("node") && (cmd.includes("ultrarouter") || cmd.includes("9router")) && (cmd.includes("cli.js") || cmd.includes("\\ultrarouter") || cmd.includes("/ultrarouter") || cmd.includes("\\9router") || cmd.includes("/9router")))
+              (cmd.includes("node") && (cmd.includes("ultrarouter") || cmd.includes("ultrarouter")) && (cmd.includes("cli.js") || cmd.includes("\\ultrarouter") || cmd.includes("/ultrarouter") || cmd.includes("\\ultrarouter") || cmd.includes("/ultrarouter")))
               || cmd.includes("next-server");
             if (isAppProcess) {
               const match = line.match(/^"(\d+)"/);
@@ -326,11 +337,11 @@ function killAllAppProcesses() {
           const lines = output.split('\n');
 
           lines.forEach(line => {
-            // Whitelist: real node process running ultrarouter/9router cli.js, or next-server.
+            // Whitelist: real node process running ultrarouter/ultrarouter cli.js, or next-server.
             // Avoids killing grep/strace/editors/cursor that incidentally match the package name.
             const cmd = line.toLowerCase();
             const isAppProcess =
-              (cmd.includes("node") && (cmd.includes("ultrarouter") || cmd.includes("9router")) && (cmd.includes("cli.js") || cmd.includes("/ultrarouter") || cmd.includes("/9router")))
+              (cmd.includes("node") && (cmd.includes("ultrarouter") || cmd.includes("ultrarouter")) && (cmd.includes("cli.js") || cmd.includes("/ultrarouter") || cmd.includes("/ultrarouter")))
               || cmd.includes("next-server");
             if (isAppProcess) {
               const parts = line.trim().split(/\s+/);
@@ -914,7 +925,7 @@ function startServer(updatePromise) {
     if (restartCount >= MAX_RESTARTS) {
       console.error(`\n⚠️  Server crashed ${MAX_RESTARTS} times. Disabling MIT and restarting...`);
       try {
-        const dbPath = path.join(os.homedir(), process.platform === "win32" ? path.join("AppData", "Roaming", "9router", "db.json") : path.join(".9router", "db.json"));
+        const dbPath = path.join(getAppDataDir(), "db.json");
         if (fs.existsSync(dbPath)) {
           const db = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
           if (db.settings) db.settings.mitmEnabled = false;

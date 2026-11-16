@@ -47,12 +47,15 @@ npx ultrarouter
 **Option 2 — Docker (server/VPS):**
 
 ```bash
-docker run -d --name 9router -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" -e DATA_DIR=/app/data \
-  decolua/9router:latest
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter
+docker build -t ultrarouter .
+docker run -d --name ultrarouter -p 20128:20128 \
+  -v "$HOME/.ultrarouter:/app/data" -e DATA_DIR=/app/data \
+  ultrarouter:latest
 ```
 
-Published images: [Docker Hub](https://hub.docker.com/r/decolua/9router) • [GHCR](https://github.com/decolua/9router/pkgs/container/9router) (multi-platform amd64/arm64).
+Release tags may also publish `ghcr.io/ducanh98x/ultrarouter` (multi-platform amd64/arm64).
 
 🎉 Dashboard opens at `http://localhost:20128`
 
@@ -97,7 +100,7 @@ npx ultrarouter connect http://<server-host>:20128 --tools claude,codex  # or ch
 npx ultrarouter connect --reset --tools claude,codex                     # undo
 ```
 
-It logs in with the dashboard password (hidden prompt), reuses or creates an API key named `cli-<hostname>`, and writes each tool's config (backing up the original once as `*.bak-9router`).
+It logs in with the dashboard password (hidden prompt), reuses or creates an API key named `cli-<hostname>`, and writes each tool's config (backing up the original once as `*.bak-ultrarouter`).
 
 Supported tools: `claude`, `codex`, `opencode`, `droid`, `crush`, `kilo`, `cline`, `pi`, `omp`, or `all`.
 
@@ -110,7 +113,7 @@ Models come from the **server's own CLI-tools configuration**, so a client gets 
 | `claude` | tier flag (`--opus` …) → server's Claude tier → *left unset* (Claude Code's own default) |
 | others | `--model` → that tool's own model on the server → server's OpenCode model → *tool skipped* |
 
-`kilo` has no readable model on the server, so it always uses `--model` or the OpenCode model. `omp` (Oh My Pi) needs no model: it uses proxy discovery, so every server model appears under `9router` in `/model`. A Claude tier the server doesn't set is removed from your config rather than kept from an earlier run. A skipped tool makes the command exit `1`.
+`kilo` has no readable model on the server, so it always uses `--model` or the OpenCode model. `omp` (Oh My Pi) needs no model: it uses proxy discovery, so every server model appears under `ultrarouter` in `/model`. A Claude tier the server doesn't set is removed from your config rather than kept from an earlier run. A skipped tool makes the command exit `1`.
 
 ### Overriding the server's models
 
@@ -158,18 +161,18 @@ npx ultrarouter show claude --json   # machine-readable (key still masked)
      sonnet  cc/claude-sonnet-5-5
 ```
 
-Tools not pointed at 9router are listed as `not configured`. For Codex, OpenCode and Cline it also warns when a 9router entry exists but another provider is the active one.
+Tools not pointed at ultrarouter are listed as `not configured`. For Codex, OpenCode and Cline it also warns when a ultrarouter entry exists but another provider is the active one.
 
 ### Other options
 
 | Option | Purpose |
 |---|---|
-| `--password <pw>` | Dashboard password (or `NINE_ROUTER_PASSWORD`); prompted if omitted — preferred, keeps it out of shell history |
-| `--save` | After a successful login, save the password for this server to `~/.9router/connect.env` (plain text, mode 600) so later runs skip the prompt. Delete the file to forget it |
+| `--password <pw>` | Dashboard password (or `ULTRAROUTER_PASSWORD`); prompted if omitted — preferred, keeps it out of shell history |
+| `--save` | After a successful login, save the password for this server to `~/.ultrarouter/connect.env` (plain text, mode 600) so later runs skip the prompt. Delete the file to forget it |
 | `--api-key <key>` | Use this key and skip login. The server's models can't be read without a login, so pass model flags |
 | `--key-name <name>` | API key name to reuse/create (default `cli-<hostname>`) |
 | `--print-env` | Also print `OPENAI_BASE_URL` / `OPENAI_API_KEY` for other CLIs |
-| `--reset` | Remove the 9router settings from the selected tools |
+| `--reset` | Remove the UltraRouter settings from the selected tools |
 
 See `ultrarouter connect --help` for the full list.
 
@@ -187,9 +190,9 @@ Any tool supporting OpenAI/Claude-compatible API works.
 
 ## 💾 Data Location
 
-- **macOS/Linux**: `~/.9router/db/data.sqlite`
-- **Windows**: `%APPDATA%/9router/db/data.sqlite`
-- **Docker**: `/app/data/db/data.sqlite` (mount `$HOME/.9router` to persist)
+- **macOS/Linux**: `~/.ultrarouter/db/data.sqlite`
+- **Windows**: `%APPDATA%/ultrarouter/db/data.sqlite`
+- **Docker**: `/app/data/db/data.sqlite` (mount `$HOME/.ultrarouter` to persist)
 
 ---
 

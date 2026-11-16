@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe("runtime install scope (#5443)", () => {
   it.each(["true", "false", undefined])("installs locally with inherited npm global=%s", (global) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "9router-install-scope-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ultrarouter-install-scope-"));
     roots.push(root);
     const runtime = path.join(root, "runtime");
     const fixture = path.join(root, "fixture");

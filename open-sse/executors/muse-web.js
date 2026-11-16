@@ -608,7 +608,7 @@ export class MuseWebExecutor extends BaseExecutor {
         return {
           response: errorResponse(
             503,
-            "Muse Web needs a Chrome/Chromium binary. Install Google Chrome, set NINEROUTER_BROWSER_BIN " +
+            "Muse Web needs a Chrome/Chromium binary. Install Google Chrome, set ULTRAROUTER_BROWSER_BIN " +
               "or CHROME_PATH to an existing Chrome, or run `npx playwright-core install chromium`."
           ),
           url: "https://muse.ai",

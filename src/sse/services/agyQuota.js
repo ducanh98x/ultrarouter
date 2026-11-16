@@ -7,7 +7,7 @@
  *   3p-weekly / 3p-5h                  → Claude & GPT family
  *   gemini-argon-wtu-weekly            → Gemini 4 Argon family
  *
- * 9router caches them per connection and uses them to skip an exhausted account
+ * ultrarouter caches them per connection and uses them to skip an exhausted account
  * before the request reaches the container.
  */
 import * as log from "../utils/logger.js";

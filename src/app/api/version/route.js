@@ -8,11 +8,11 @@ const VERSION_CACHE_TTL_MS = 5 * 60 * 1000; // cache npm lookup for 5 min
 // Survive hot reload; one cache per process
 const versionCache = (global.__ultrarouterVersionCache ??= { value: null, fetchedAt: 0 });
 
-// Fetch the latest version of this fork's npm package.
-function fetchLatestVersion() {
+// Fetch a JSON document and pull its top-level version field.
+function fetchVersionJson(url) {
   return new Promise((resolve) => {
     const req = https.get(
-      `https://registry.npmjs.org/${NPM_PACKAGE_NAME}/latest`,
+      url,
       { timeout: 5000, headers: { "User-Agent": "ultrarouter-update-check" } },
       (res) => {
         if (res.statusCode !== 200) {
@@ -24,7 +24,8 @@ function fetchLatestVersion() {
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
           try {
-            resolve(JSON.parse(data)?.version || null);
+            const version = JSON.parse(data)?.version;
+            resolve(typeof version === "string" && version ? version : null);
           } catch {
             resolve(null);
           }
@@ -34,6 +35,16 @@ function fetchLatestVersion() {
     req.on("error", () => resolve(null));
     req.on("timeout", () => { req.destroy(); resolve(null); });
   });
+}
+
+// Prefer the published npm package; before the first publish (or during an npm
+// outage) fall back to the fork's master package.json.
+async function fetchLatestVersion() {
+  const fromNpm = await fetchVersionJson(`https://registry.npmjs.org/${NPM_PACKAGE_NAME}/latest`);
+  if (fromNpm) return { version: fromNpm, source: "npm" };
+  const fromRepo = await fetchVersionJson(GITHUB_CONFIG.packageJsonUrl);
+  if (fromRepo) return { version: fromRepo, source: "repo" };
+  return { version: null, source: "npm" };
 }
 
 function compareVersions(a, b) {
@@ -48,18 +59,20 @@ function compareVersions(a, b) {
 
 async function getLatestVersionCached() {
   if (versionCache.value && Date.now() - versionCache.fetchedAt < VERSION_CACHE_TTL_MS) {
-    return versionCache.value;
+    return versionCache;
   }
   const latest = await fetchLatestVersion();
-  if (latest) {
-    versionCache.value = latest;
+  if (latest.version) {
+    versionCache.value = latest.version;
+    versionCache.source = latest.source;
     versionCache.fetchedAt = Date.now();
   }
   return latest;
 }
 
 export async function GET() {
-  const latestVersion = await getLatestVersionCached();
+  const latest = await getLatestVersionCached();
+  const latestVersion = latest.value ?? latest.version ?? null;
   const currentVersion = pkg.version;
   const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
 
@@ -67,7 +80,7 @@ export async function GET() {
     currentVersion,
     latestVersion,
     hasUpdate,
-    source: "npm",
+    source: latest.source || "npm",
     package: NPM_PACKAGE_NAME,
     repo: GITHUB_CONFIG.repo,
   });

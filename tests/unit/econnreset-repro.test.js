@@ -1,4 +1,4 @@
-// Reproduce the production failure Claude Code reports through 9router:
+// Reproduce the production failure Claude Code reports through UltraRouter:
 //   [502]: fetch failed (cause: ECONNRESET: read ECONNRESET)
 // Three failure phases behave differently — this file pins each one against the
 // real transport stack (BaseExecutor + proxyAwareFetch + formatProviderError):

@@ -2,12 +2,12 @@
 #
 # agy-gateway — one container per Antigravity account.
 #
-#   docker build -t 9router/agy-gateway:1.5.9 docker/agy-gateway
+#   docker build -t ultrarouter/agy-gateway:1.5.9 docker/agy-gateway
 #   docker run -d --name agy-01 \
 #     -p 127.0.0.1:20801:8787 \
 #     -v agy-01:/data \
 #     -e GATEWAY_TOKEN=... \
-#     9router/agy-gateway:1.5.9
+#     ultrarouter/agy-gateway:1.5.9
 #
 # Linux requirements for `agy` (per Google docs): glibc >= 2.28, glibcxx >= 3.4.25
 # → Debian bookworm (glibc 2.36) is fine.

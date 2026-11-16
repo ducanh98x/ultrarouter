@@ -1,7 +1,7 @@
 /**
  * Docker bootstrap for the Antigravity CLI provider.
  *
- * 9router runs directly on the host, so it can install and drive a local Docker
+ * ultrarouter runs directly on the host, so it can install and drive a local Docker
  * daemon. Everything here is idempotent and never reboots the machine; when an
  * automatic install is not possible it returns the exact commands the user can
  * paste into a shell.
@@ -15,7 +15,7 @@ export const DOCKER_SETUP_COMMANDS = [
   "sudo apt-get install -y docker.io",
   "sudo systemctl enable --now docker",
   "sudo usermod -aG docker $USER",
-  "# then restart 9router (or log out and back in) so the docker group applies",
+  "# then restart ultrarouter (or log out and back in) so the docker group applies",
 ];
 
 export function runCommand(command, args = [], { timeoutMs = 180_000 } = {}) {

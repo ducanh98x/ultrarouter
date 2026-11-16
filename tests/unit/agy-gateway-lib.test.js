@@ -64,7 +64,7 @@ describe("buildChatArgs", () => {
     const settingsIndex = args.indexOf("--settings");
     expect(settingsIndex).toBeGreaterThan(-1);
     const settings = JSON.parse(args[settingsIndex + 1]);
-    expect(settings.permissions.allow).toContain("mcp(9router/*)");
+    expect(settings.permissions.allow).toContain("mcp(ultrarouter/*)");
     expect(settings.permissions.deny).toEqual(expect.arrayContaining([
       "command(*)", "read_file(*)", "write_file(*)", "read_url(*)",
     ]));

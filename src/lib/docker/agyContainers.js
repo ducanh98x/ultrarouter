@@ -2,7 +2,7 @@
  * Docker container lifecycle for the Antigravity CLI provider.
  *
  * One container per account:
- *   9router  --HTTP-->  127.0.0.1:<hostPort>  -->  agy-gateway  -->  agy  --> Google
+ *   ultrarouter  --HTTP-->  127.0.0.1:<hostPort>  -->  agy-gateway  -->  agy  --> Google
  *
  * The container publishes a loopback-only port, keeps its HOME on a named
  * volume (so the OAuth session survives restarts) and receives the account's
@@ -14,14 +14,17 @@ import net from "node:net";
 import { getDockerClient } from "./client.js";
 
 export const AGY_WRAPPER_PORT = 8787;
-export const AGY_IMAGE = process.env.AGY_IMAGE || "9router/agy-gateway";
+export const AGY_IMAGE = process.env.AGY_IMAGE || "ultrarouter/agy-gateway";
 export const AGY_IMAGE_TAG = process.env.AGY_IMAGE_TAG || "1.5.9";
 export const DEFAULT_PORT_RANGE = [20800, 20999];
 
-export const LABEL_MANAGED = "9router.managed";
-export const LABEL_CONNECTION = "9router.connection";
-export const LABEL_COMPONENT = "9router.component";
+export const LABEL_MANAGED = "ultrarouter.managed";
+export const LABEL_CONNECTION = "ultrarouter.connection";
+export const LABEL_COMPONENT = "ultrarouter.component";
 export const COMPONENT_VALUE = "agy-gateway";
+export const LEGACY_LABEL_MANAGED = "9router.managed";
+export const LEGACY_LABEL_CONNECTION = "9router.connection";
+export const LEGACY_LABEL_COMPONENT = "9router.component";
 
 export function agyImageRef(tag = AGY_IMAGE_TAG, image = AGY_IMAGE) {
   return `${image}:${tag}`;
@@ -29,11 +32,16 @@ export function agyImageRef(tag = AGY_IMAGE_TAG, image = AGY_IMAGE) {
 
 export function containerNameFor(connectionId) {
   const short = String(connectionId || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "unknown";
-  return `9router-agy-${short}`;
+  return `ultrarouter-agy-${short}`;
 }
 
 export function volumeNameFor(connectionId) {
   return containerNameFor(connectionId);
+}
+
+export function legacyVolumeNameFor(connectionId) {
+  const short = String(connectionId || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "unknown";
+  return `9router-agy-${short}`;
 }
 
 /**
@@ -76,6 +84,7 @@ export function buildContainerSpec({
   memory = "256m",
   cpus = 1,
   pidsLimit = 256,
+  volumeName,
 }) {
   if (!connectionId) throw new Error("connectionId is required");
   if (!hostPort) throw new Error("hostPort is required");
@@ -109,7 +118,7 @@ export function buildContainerSpec({
     Tty: false,
     OpenStdin: false,
     HostConfig: {
-      Binds: [`${volumeNameFor(connectionId)}:/data`],
+      Binds: [`${volumeName || volumeNameFor(connectionId)}:/data`],
       PortBindings: {
         [`${AGY_WRAPPER_PORT}/tcp`]: [{ HostIp: "127.0.0.1", HostPort: String(hostPort) }],
       },
@@ -156,10 +165,21 @@ export function generateGatewayToken() {
 }
 
 export async function listManagedContainers(client = getDockerClient()) {
-  return client.listContainers({
-    all: true,
-    filters: { label: [`${LABEL_MANAGED}=true`, `${LABEL_COMPONENT}=${COMPONENT_VALUE}`] },
-  });
+  const [current, legacy] = await Promise.all([
+    client.listContainers({
+      all: true,
+      filters: { label: [`${LABEL_MANAGED}=true`, `${LABEL_COMPONENT}=${COMPONENT_VALUE}`] },
+    }),
+    client.listContainers({
+      all: true,
+      filters: { label: [`${LEGACY_LABEL_MANAGED}=true`, `${LEGACY_LABEL_COMPONENT}=${COMPONENT_VALUE}`] },
+    }).catch(() => []),
+  ]);
+  const byId = new Map();
+  for (const container of [...(current || []), ...(legacy || [])]) {
+    if (container?.Id) byId.set(container.Id, container);
+  }
+  return [...byId.values()];
 }
 
 export async function findContainerForConnection(connectionId, client = getDockerClient()) {
@@ -168,7 +188,12 @@ export async function findContainerForConnection(connectionId, client = getDocke
     all: true,
     filters: { label: [`${LABEL_CONNECTION}=${connectionId}`] },
   });
-  return list?.[0] || null;
+  if (list?.[0]) return list[0];
+  const legacy = await client.listContainers({
+    all: true,
+    filters: { label: [`${LEGACY_LABEL_CONNECTION}=${connectionId}`] },
+  }).catch(() => []);
+  return legacy?.[0] || null;
 }
 
 export async function createAgyContainer({
@@ -182,21 +207,51 @@ export async function createAgyContainer({
   cpus,
 } = {}) {
   const name = containerNameFor(connectionId);
+
+  // Keep the login volume of a pre-rebrand container. Its name was derived from
+  // the connection id and the old prefix; recreate must not start from empty.
+  const existing = await findContainerForConnection(connectionId, client);
+  let volumeName = volumeNameFor(connectionId);
+  if (existing) {
+    try {
+      const info = await client.inspectContainer(existing.Id);
+      const bind = info?.HostConfig?.Binds?.find((entry) => String(entry).endsWith(":/data"));
+      const boundVolume = bind ? String(bind).split(":")[0] : info?.Mounts?.find((m) => m.Destination === "/data")?.Name;
+      if (boundVolume) volumeName = boundVolume;
+    } catch { /* inspect is best-effort */ }
+  }
+
   // Ensure the image exists before removing the old container: a bad tag
   // should fail the update without taking the working container down.
-  if (!(await client.imageExists(image))) {
-    await client.pullImage(image);
+  let imageToUse = image;
+  if (!(await client.imageExists(imageToUse))) {
+    const legacyImage = imageToUse.startsWith("ultrarouter/")
+      ? `9router/${imageToUse.slice("ultrarouter/".length)}`
+      : null;
+    if (legacyImage && (await client.imageExists(legacyImage))) {
+      imageToUse = legacyImage;
+    } else {
+      await client.pullImage(imageToUse);
+    }
   }
 
-  const exists = await findContainerForConnection(connectionId, client);
-  if (exists) {
-    await client.removeContainer(exists.Id, { force: true });
+  if (existing) {
+    await client.removeContainer(existing.Id, { force: true });
   }
 
-  const spec = buildContainerSpec({ connectionId, hostPort, image, gatewayToken, proxyUrl, memory, cpus });
+  const spec = buildContainerSpec({
+    connectionId,
+    hostPort,
+    image: imageToUse,
+    gatewayToken,
+    proxyUrl,
+    memory,
+    cpus,
+    volumeName,
+  });
   const created = await client.createContainer(name, spec);
   await client.startContainer(created.Id);
-  return { id: created.Id, name, image, hostPort };
+  return { id: created.Id, name, image: imageToUse, hostPort };
 }
 
 export async function recreateAgyContainer(options = {}) {

@@ -1,12 +1,12 @@
 # Câu hỏi thường gặp
 
-Những câu hỏi phổ biến về 9Router.
+Những câu hỏi phổ biến về UltraRouter.
 
 ---
 
-## 9Router là gì?
+## UltraRouter là gì?
 
-**9Router là bộ định tuyến mô hình AI giúp tối đa hóa giá trị subscription và giảm chi phí.**
+**UltraRouter là bộ định tuyến mô hình AI giúp tối đa hóa giá trị subscription và giảm chi phí.**
 
 Nó định tuyến request thông minh qua nhiều provider AI bằng hệ thống fallback 3 tầng:
 1. **Tầng Subscription** - Tối đa quota Claude Code, Codex, Gemini bạn đang trả tiền
@@ -23,7 +23,7 @@ Nó định tuyến request thông minh qua nhiều provider AI bằng hệ th�
 
 ## Pricing hoạt động thế nào?
 
-**9Router dùng chiến lược pricing 3 tầng:**
+**UltraRouter dùng chiến lược pricing 3 tầng:**
 
 ### Tier 1: Subscription (Dùng đầu tiên)
 - **Claude Code** (Pro/Max): $20-100/tháng - Quota 5 giờ + hàng tuần
@@ -50,9 +50,9 @@ Nó định tuyến request thông minh qua nhiều provider AI bằng hệ th�
 
 ---
 
-## 9Router có miễn phí không?
+## UltraRouter có miễn phí không?
 
-**Có, 9Router hoàn toàn miễn phí và mã nguồn mở 100%.**
+**Có, UltraRouter hoàn toàn miễn phí và mã nguồn mở 100%.**
 
 **Provider free tier có sẵn:**
 - **Gemini CLI** - 180K completions/tháng (MIỄN PHÍ tài khoản Google)
@@ -96,7 +96,7 @@ Xem [tài liệu providers](providers/subscription.md) để biết chi tiết.
 
 ## Tôi có thể dùng nhiều provider không?
 
-**Có! Đây là tính năng cốt lõi của 9Router.**
+**Có! Đây là tính năng cốt lõi của UltraRouter.**
 
 **Combo cho phép bạn nối nhiều provider với fallback tự động:**
 
@@ -129,7 +129,7 @@ Xem [tài liệu combos](features/combos.md) để biết ví dụ.
 
 ## Quota tracking hoạt động thế nào?
 
-**9Router theo dõi quota thời gian thực cho tất cả provider:**
+**UltraRouter theo dõi quota thời gian thực cho tất cả provider:**
 
 **Tính năng:**
 - **Token consumption** - Tokens input/output mỗi request
@@ -154,13 +154,13 @@ Xem [tài liệu quota tracking](features/quota-tracking.md) để biết chi ti
 
 ---
 
-## 9Router có hoạt động với Cursor không?
+## UltraRouter có hoạt động với Cursor không?
 
 **Có, nhưng Cursor yêu cầu endpoint cloud.**
 
 **Vấn đề:** Cursor IDE không hỗ trợ endpoint localhost.
 
-**Giải pháp:** Dùng 9Router cloud deployment:
+**Giải pháp:** Dùng UltraRouter cloud deployment:
 
 ```
 Cursor Settings → Models → Advanced:
@@ -172,8 +172,8 @@ Cursor Settings → Models → Advanced:
 **Thay thế:** Self-host trên VPS với domain công khai:
 ```bash
 # Deploy to VPS
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter/app
 npm install && npm run build
 npm start
 
@@ -192,22 +192,22 @@ Xem [hướng dẫn tích hợp Cursor](integration/cursor.md) để biết chi 
 
 ---
 
-## Tôi có thể self-host 9Router không?
+## Tôi có thể self-host UltraRouter không?
 
-**Có! 9Router hỗ trợ nhiều tùy chọn deployment:**
+**Có! UltraRouter hỗ trợ nhiều tùy chọn deployment:**
 
 ### Localhost (Mặc định)
 ```bash
-npm install -g 9router
-9router
+npm install -g ultrarouter
+ultrarouter
 → Dashboard: http://localhost:3000
 → API: http://localhost:20128/v1
 ```
 
 ### VPS/Cloud
 ```bash
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter/app
 npm install && npm run build
 
 export JWT_SECRET="your-secure-secret"
@@ -219,23 +219,23 @@ npm start
 
 ### Docker
 ```bash
-docker build -t 9router .
+docker build -t ultrarouter .
 docker run -d \
   -p 3000:3000 \
   -e JWT_SECRET="your-secret" \
-  -v 9router-data:/app/data \
-  9router
+  -v ultrarouter-data:/app/data \
+  ultrarouter
 ```
 
 ### Cloudflare Workers
 ```bash
-cd 9router/app
+cd ultrarouter/app
 npm run deploy:cloudflare
 ```
 
 **Biến môi trường:**
 - `JWT_SECRET` - **PHẢI đổi trong production!**
-- `DATA_DIR` - Đường dẫn lưu database (mặc định: `~/.9router`)
+- `DATA_DIR` - Đường dẫn lưu database (mặc định: `~/.ultrarouter`)
 - `INITIAL_PASSWORD` - Đăng nhập Dashboard (mặc định: `123456`)
 - `NODE_ENV` - Đặt `production` để deploy
 
@@ -245,11 +245,11 @@ Xem [hướng dẫn deployment](getting-started/installation.md#deployment) đ�
 
 ## Dữ liệu của tôi có an toàn không?
 
-**Có, 9Router ưu tiên bảo mật và quyền riêng tư:**
+**Có, UltraRouter ưu tiên bảo mật và quyền riêng tư:**
 
 **Local storage:**
-- Mọi dữ liệu lưu cục bộ tại `~/.9router` (hoặc `DATA_DIR` tùy chỉnh)
-- Không gửi data đến server 9Router
+- Mọi dữ liệu lưu cục bộ tại `~/.ultrarouter` (hoặc `DATA_DIR` tùy chỉnh)
+- Không gửi data đến server UltraRouter
 - OAuth tokens mã hóa bằng JWT
 
 **Không telemetry:**
@@ -268,31 +268,31 @@ Xem [hướng dẫn deployment](getting-started/installation.md#deployment) đ�
 - Bật HTTPS cho cloud deployment
 - Xoay API key định kỳ
 
-**9Router lưu gì:**
+**UltraRouter lưu gì:**
 - Tokens OAuth của provider (mã hóa)
 - API keys (mã hóa)
 - Thống kê sử dụng (chỉ cục bộ)
 - Cấu hình combo
 
-**9Router KHÔNG lưu:**
+**UltraRouter KHÔNG lưu:**
 - Prompts hoặc responses của bạn
 - Code bạn tạo
 - Thông tin cá nhân
 
 ---
 
-## Làm thế nào để cập nhật 9Router?
+## Làm thế nào để cập nhật UltraRouter?
 
 **Phương thức cập nhật phụ thuộc loại cài đặt:**
 
 ### Global NPM Install
 ```bash
-npm update -g 9router
+npm update -g ultrarouter
 ```
 
 ### Local Install
 ```bash
-cd 9router/app
+cd ultrarouter/app
 git pull origin main
 npm install
 npm run build
@@ -301,23 +301,23 @@ npm start
 
 ### Docker
 ```bash
-docker pull 9router:latest
-docker stop 9router
-docker rm 9router
+docker pull ultrarouter:latest
+docker stop ultrarouter
+docker rm ultrarouter
 docker run -d \
   -p 3000:3000 \
-  -v 9router-data:/app/data \
-  9router:latest
+  -v ultrarouter-data:/app/data \
+  ultrarouter:latest
 ```
 
 **Kiểm tra version:**
 ```bash
-9router --version
+ultrarouter --version
 ```
 
 **Breaking changes:**
-- Xem [CHANGELOG.md](https://github.com/decolua/9router/blob/main/CHANGELOG.md)
-- Backup `~/.9router` trước khi update lớn
+- Xem [CHANGELOG.md](https://github.com/ducanh98x/ultrarouter/blob/master/CHANGELOG.md)
+- Backup `~/.ultrarouter` trước khi update lớn
 - Xem hướng dẫn migration cho major version
 
 ---
@@ -329,18 +329,18 @@ docker run -d \
 ### Các cách đóng góp:
 
 1. **Report bugs:**
-   - [GitHub Issues](https://github.com/decolua/9router/issues)
+   - [GitHub Issues](https://github.com/ducanh98x/ultrarouter/issues)
    - Bao gồm error logs, các bước reproduce
 
 2. **Request features:**
-   - [GitHub Discussions](https://github.com/decolua/9router/discussions)
+   - [GitHub Discussions](https://github.com/ducanh98x/ultrarouter/discussions)
    - Mô tả use case và lợi ích
 
 3. **Submit code:**
    ```bash
    # Fork repo
-   git clone https://github.com/YOUR_USERNAME/9router.git
-   cd 9router
+   git clone https://github.com/YOUR_USERNAME/ultrarouter.git
+   cd ultrarouter
    
    # Create branch
    git checkout -b feature/your-feature
@@ -375,13 +375,13 @@ docker run -d \
 - Cập nhật tài liệu
 - Giữ commit nhỏ gọn và mô tả rõ ràng
 
-Xem [CONTRIBUTING.md](https://github.com/decolua/9router/blob/main/CONTRIBUTING.md) để biết chi tiết.
+Xem [CONTRIBUTING.md](https://github.com/ducanh98x/ultrarouter/blob/master/CONTRIBUTING.md) để biết chi tiết.
 
 ---
 
 ## Cần trợ giúp thêm?
 
 - **Documentation:** [9router.com/docs](https://9router.com/docs)
-- **GitHub:** [github.com/decolua/9router](https://github.com/decolua/9router)
-- **Issues:** [github.com/decolua/9router/issues](https://github.com/decolua/9router/issues)
+- **GitHub:** [github.com/ducanh98x/ultrarouter](https://github.com/ducanh98x/ultrarouter)
+- **Issues:** [github.com/ducanh98x/ultrarouter/issues](https://github.com/ducanh98x/ultrarouter/issues)
 - **Troubleshooting:** [troubleshooting.md](troubleshooting.md)

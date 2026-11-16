@@ -13,9 +13,9 @@ import { demuxDockerLogs, resolveDockerEndpoint } from "@/lib/docker/client.js";
 
 describe("agy container naming", () => {
   it("uses the first 8 alphanumerics of the connection id", () => {
-    expect(containerNameFor("1a2b3c4d-1111-2222-3333-444455556666")).toBe("9router-agy-1a2b3c4d");
-    expect(containerNameFor("")).toBe("9router-agy-unknown");
-    expect(volumeNameFor("1a2b3c4d-1111")).toBe("9router-agy-1a2b3c4d");
+    expect(containerNameFor("1a2b3c4d-1111-2222-3333-444455556666")).toBe("ultrarouter-agy-1a2b3c4d");
+    expect(containerNameFor("")).toBe("ultrarouter-agy-unknown");
+    expect(volumeNameFor("1a2b3c4d-1111")).toBe("ultrarouter-agy-1a2b3c4d");
   });
 });
 
@@ -24,7 +24,7 @@ describe("buildContainerSpec", () => {
     connectionId: "1a2b3c4d-1111-2222-3333-444455556666",
     hostPort: 20801,
     gatewayToken: "tok",
-    image: "9router/agy-gateway:1.5.9",
+    image: "ultrarouter/agy-gateway:1.5.9",
   };
 
   it("publishes the wrapper port on loopback only", () => {
@@ -37,7 +37,7 @@ describe("buildContainerSpec", () => {
 
   it("keeps HOME on a named volume and makes the rootfs read-only", () => {
     const spec = buildContainerSpec(base);
-    expect(spec.HostConfig.Binds).toEqual(["9router-agy-1a2b3c4d:/data"]);
+    expect(spec.HostConfig.Binds).toEqual(["ultrarouter-agy-1a2b3c4d:/data"]);
     expect(spec.Env).toContain("HOME=/data");
     expect(spec.HostConfig.ReadonlyRootfs).toBe(true);
     expect(spec.HostConfig.Tmpfs["/tmp"]).toContain("size=");
@@ -46,9 +46,9 @@ describe("buildContainerSpec", () => {
 
   it("labels the container so reconcile can find it", () => {
     const spec = buildContainerSpec(base);
-    expect(spec.Labels["9router.managed"]).toBe("true");
-    expect(spec.Labels["9router.component"]).toBe("agy-gateway");
-    expect(spec.Labels["9router.connection"]).toBe(base.connectionId);
+    expect(spec.Labels["ultrarouter.managed"]).toBe("true");
+    expect(spec.Labels["ultrarouter.component"]).toBe("agy-gateway");
+    expect(spec.Labels["ultrarouter.connection"]).toBe(base.connectionId);
   });
 
   it("injects the account proxy only when configured", () => {

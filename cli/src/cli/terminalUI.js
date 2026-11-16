@@ -67,7 +67,7 @@ async function startTerminalUI(port) {
   // Configure API client
   api.configure({ port });
 
-  const basePath = ["9Router"];
+  const basePath = ["UltraRouter"];
 
   // Prime header cache before first render
   await refreshHeaderBg(port);

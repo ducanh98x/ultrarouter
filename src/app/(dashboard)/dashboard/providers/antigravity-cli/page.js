@@ -212,7 +212,7 @@ export default function AntigravityCliPage() {
     const currentMemory = connection.providerSpecificData?.memory || "256m";
     const currentCpus = String(connection.providerSpecificData?.cpus || 1);
     const currentImageTag = connection.providerSpecificData?.imageTag
-      || String(connection.providerSpecificData?.image || "9router/agy-gateway:1.5.9").split(":").pop();
+      || String(connection.providerSpecificData?.image || "ultrarouter/agy-gateway:1.5.9").split(":").pop();
     setEdit({
       id: connection.id,
       name: connection.name || "",
@@ -384,7 +384,7 @@ export default function AntigravityCliPage() {
         </Link>
         <h1 className="text-xl font-semibold text-text-main">Antigravity CLI</h1>
         <p className="max-w-3xl text-sm text-text-muted">
-          One Docker container per account runs the official <code className="font-mono">agy</code> CLI. 9router only relays
+          One Docker container per account runs the official <code className="font-mono">agy</code> CLI. ultrarouter only relays
           OpenAI-compatible requests, so no IDE impersonation is involved. Each container keeps its own login in a{" "}
           <code className="font-mono">/data</code> volume and can use its own proxy.
         </p>

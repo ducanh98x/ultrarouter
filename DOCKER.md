@@ -1,6 +1,12 @@
 # Docker
 
-Run UltraRouter in a container. The published image is still upstream [`decolua/9router`](https://hub.docker.com/r/decolua/9router) — multi-platform `linux/amd64` + `linux/arm64`. For the newest fork features, install from npm (`npm i -g ultrarouter@latest`).
+Run UltraRouter in a container. Build the image from this repo; release tags can also publish to GHCR. For the newest features, npm remains simplest (`npm i -g ultrarouter@latest`).
+
+```bash
+git clone https://github.com/ducanh98x/ultrarouter.git
+cd ultrarouter
+docker build -t ultrarouter .
+```
 
 ---
 
@@ -11,10 +17,10 @@ Run UltraRouter in a container. The published image is still upstream [`decolua/
 ```bash
 docker run -d \
   -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" \
+  -v "$HOME/.ultrarouter:/app/data" \
   -e DATA_DIR=/app/data \
-  --name 9router \
-  decolua/9router:latest
+  --name ultrarouter \
+  ultrarouter:latest
 ```
 
 App listens on port `20128`. Open: http://localhost:20128
@@ -22,10 +28,10 @@ App listens on port `20128`. Open: http://localhost:20128
 ## Manage container
 
 ```bash
-docker logs -f 9router        # view logs
-docker stop 9router           # stop
-docker start 9router          # start again
-docker rm -f 9router          # remove
+docker logs -f ultrarouter        # view logs
+docker stop ultrarouter           # stop
+docker start ultrarouter          # start again
+docker rm -f ultrarouter          # remove
 ```
 
 ## Antigravity CLI provider
@@ -39,17 +45,17 @@ If you run UltraRouter itself in Docker, use host networking on Linux and mount 
 ```bash
 docker run -d \
   --network host \
-  -v "$HOME/.9router:/app/data" \
+  -v "$HOME/.ultrarouter:/app/data" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e DATA_DIR=/app/data \
-  --name 9router \
-  decolua/9router:latest
+  --name ultrarouter \
+  ultrarouter:latest
 ```
 
 Build the gateway image once on the host:
 
 ```bash
-docker build -t 9router/agy-gateway:1.5.9 docker/agy-gateway
+docker build -t ultrarouter/agy-gateway:1.5.9 docker/agy-gateway
 ```
 
 Then open **Providers → Antigravity CLI → Create container**. Each account keeps its login in a named `/data` volume, can use its own proxy pool, and defaults to 256m RAM / 1 CPU (editable in **Edit**). The **Test** button performs a real completion; **Disable/Enable** controls account rotation. Built-in shell/file/web tools are denied inside the container; client tools are bridged through MCP.
@@ -59,11 +65,11 @@ Then open **Providers → Antigravity CLI → Create container**. Each account k
 
 
 ```bash
--v "$HOME/.9router:/app/data" \
+-v "$HOME/.ultrarouter:/app/data" \
 -e DATA_DIR=/app/data
 ```
 
-Without `DATA_DIR`, the app falls back to `~/.9router/` (macOS/Linux) or `%APPDATA%\9router\` (Windows). In the container, `DATA_DIR=/app/data` makes the bind mount work.
+Without `DATA_DIR`, the app falls back to `~/.ultrarouter/` (macOS/Linux) or `%APPDATA%\ultrarouter\` (Windows). In the container, `DATA_DIR=/app/data` makes the bind mount work.
 
 Data layout under `$DATA_DIR/`:
 
@@ -75,7 +81,7 @@ $DATA_DIR/
 └── ...                   # certs, logs, runtime configs
 ```
 
-Host path: `$HOME/.9router/db/data.sqlite`
+Host path: `$HOME/.ultrarouter/db/data.sqlite`
 Container path: `/app/data/db/data.sqlite`
 
 ## Optional env vars
@@ -83,13 +89,13 @@ Container path: `/app/data/db/data.sqlite`
 ```bash
 docker run -d \
   -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" \
+  -v "$HOME/.ultrarouter:/app/data" \
   -e DATA_DIR=/app/data \
   -e PORT=20128 \
   -e HOSTNAME=0.0.0.0 \
   -e DEBUG=true \
-  --name 9router \
-  decolua/9router:latest
+  --name ultrarouter \
+  ultrarouter:latest
 ```
 
 ## Optional Headroom sidecar
@@ -98,12 +104,12 @@ The UltraRouter image does not bundle Python or Headroom. To use Headroom in Doc
 
 ```yaml
 services:
-  9router:
-    image: decolua/9router:latest
+  ultrarouter:
+    image: ultrarouter:latest
     ports:
       - "20128:20128"
     volumes:
-      - "$HOME/.9router:/app/data"
+      - "$HOME/.ultrarouter:/app/data"
     environment:
       DATA_DIR: /app/data
       HEADROOM_URL: http://headroom:8787
@@ -123,15 +129,17 @@ If Headroom runs on the Docker host instead of as a sidecar, use `http://host.do
 ## Update to latest
 
 ```bash
-docker pull decolua/9router:latest
-docker rm -f 9router
+git pull
+docker build -t ultrarouter .
+docker rm -f ultrarouter
 # re-run the quick start command
 ```
 
-To pin a specific version instead of following `latest`, use a numbered image tag:
+To pin a specific version instead of following `latest`, check out the tag and rebuild:
 
 ```bash
-docker pull decolua/9router:0.5.81
+git checkout v0.5.81
+docker build -t ultrarouter .
 ```
 
 ---
@@ -141,12 +149,12 @@ docker pull decolua/9router:0.5.81
 ## Build image locally (test)
 
 ```bash
-docker build -t 9router .
+docker build -t ultrarouter .
 
 docker run --rm -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" \
+  -v "$HOME/.ultrarouter:/app/data" \
   -e DATA_DIR=/app/data \
-  9router
+  ultrarouter
 ```
 
 The Dockerfile uses the official Alpine and npm registries by default. Regional mirrors can be supplied when needed:
@@ -155,15 +163,14 @@ The Dockerfile uses the official Alpine and npm registries by default. Regional 
 docker build \
   --build-arg ALPINE_MIRROR=mirrors.aliyun.com \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com/ \
-  -t 9router .
+  -t ultrarouter .
 ```
 
 ## Publish (automatic via CI)
 
 Push a Docker-safe semver git tag `vX.Y.Z` (or a prerelease such as `vX.Y.Z-rc.1`) → GitHub Actions builds `linux/amd64` and `linux/arm64` on native runners, health-checks each platform image, verifies the resulting manifest and `/api/health`, then publishes:
 
-- `ghcr.io/decolua/9router:X.Y.Z` + `:latest`
-- `decolua/9router:X.Y.Z` + `:latest`
+- `ghcr.io/ducanh98x/ultrarouter:X.Y.Z` + `:latest`
 
 The `v` prefix is used only for the git tag; image tags omit it. A stable tag push promotes `latest`, but a prerelease tag such as `vX.Y.Z-rc.1` publishes only its numbered image by default. Prereleases require an explicit manual `promote_latest` opt-in. Promotion happens only after both native platform builds, both platform health checks, manifest inspection, and the resolved-manifest smoke test succeed. A failed or timed-out platform build therefore cannot move `latest`.
 
@@ -194,7 +201,7 @@ promote_latest:  true
 Numbered image tags are mutable because a republish can replace their manifest. For a deployment that must be immutable, pin the image digest instead:
 
 ```bash
-docker pull decolua/9router@sha256:<verified-digest>
+docker pull ghcr.io/ducanh98x/ultrarouter@sha256:<verified-digest>
 ```
 
 The release workflow runs `/api/health` on each native `amd64` and `arm64` platform image before it uploads the digest artifact or assembles the multi-platform manifest. It then runs a second health check against the resolved version manifest before any requested `latest` promotion.
@@ -208,7 +215,7 @@ The upstream repository needs these repository secrets for Docker Hub publishing
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
 
-GHCR publishing uses the workflow's `GITHUB_TOKEN` with package write permission. Forks can publish to their own GHCR namespace, but Docker Hub publication is restricted to the upstream `decolua/9router` repository.
+GHCR publishing uses the workflow's `GITHUB_TOKEN` with package write permission. Publish Docker Hub images only if you create a Docker Hub repository and set `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` secrets (`DOCKERHUB_IMAGE` in the workflow).
 
 The optional repository variables `ALPINE_MIRROR` and `NPM_REGISTRY` can override the default package mirrors used by the CI Docker build.
 

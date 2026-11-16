@@ -1,4 +1,4 @@
-docker stop 9router
-docker rm 9router
-docker build -t 9router .
-docker run -d --name 9router -p 20128:20128 --env-file .env -v 9router-data:/app/data 9router
+docker stop ultrarouter
+docker rm ultrarouter
+docker build -t ultrarouter .
+docker run -d --name ultrarouter -p 20128:20128 --env-file .env -v ultrarouter-data:/app/data ultrarouter

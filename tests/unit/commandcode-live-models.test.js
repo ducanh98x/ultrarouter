@@ -1,7 +1,7 @@
 // Route-level acceptance for CommandCode live-model discovery:
 //   GET /api/providers/[connectionId]/models  →  vendor catalog  →  UI rows
 // The catalog URL is public, but the route still requires a seeded connection.
-// Self-isolating: DATA_DIR points at a temp dir so seeding never touches ~/.9router.
+// Self-isolating: DATA_DIR points at a temp dir so seeding never touches ~/.ultrarouter.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -68,7 +68,7 @@ let GET;
 let createProviderConnection;
 
 beforeAll(async () => {
-  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "9router-commandcode-live-"));
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "ultrarouter-commandcode-live-"));
   vi.resetModules();
   ({ GET } = await import("@/app/api/providers/[id]/models/route.js"));
   ({ createProviderConnection } = await import("@/models/index.js"));

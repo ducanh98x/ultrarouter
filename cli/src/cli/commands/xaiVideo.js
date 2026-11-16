@@ -1,6 +1,6 @@
 /**
- * `9router xai video` — generate a Grok Imagine video through the local
- * 9router gateway and save the result as an MP4 file.
+ * `ultrarouter xai video` — generate a Grok Imagine video through the local
+ * ultrarouter gateway and save the result as an MP4 file.
  *
  * Flow: POST /v1/videos/generations → poll GET /v1/videos/{request_id}
  * until done/failed/timeout → download video.url → atomic rename.
@@ -39,7 +39,7 @@ Options:
   --timeout <seconds>     Max wait for the job (default: ${DEFAULT_TIMEOUT_SEC})
   --port <port>           Gateway port (default: ${DEFAULT_PORT})
   --host <host>           Gateway host (default: ${DEFAULT_HOST})
-  --api-key <key>         9router API key (or env NINE_ROUTER_API_KEY)
+  --api-key <key>         UltraRouter API key (or env ULTRAROUTER_API_KEY)
   -h, --help              Show this help
 `;
 
@@ -54,7 +54,7 @@ function parseArgs(argv) {
     timeoutSec: DEFAULT_TIMEOUT_SEC,
     port: DEFAULT_PORT,
     host: DEFAULT_HOST,
-    apiKey: process.env.NINE_ROUTER_API_KEY || null,
+    apiKey: process.env.ULTRAROUTER_API_KEY || process.env.NINE_ROUTER_API_KEY || null,
     pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -258,7 +258,7 @@ async function run(argv) {
     }
 
     const requestId = create.body.request_id;
-    const connectionId = create.headers["x-9router-connection-id"] || null;
+    const connectionId = create.headers["x-ultrarouter-connection-id"] || null;
     console.log(`📋 Job accepted: ${requestId}`);
 
     let lastLine = "";

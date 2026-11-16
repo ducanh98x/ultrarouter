@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { UPDATER_CONFIG } from "@/shared/constants/config";
+import { getDataDir } from "@/lib/dataDir.js";
 
 const KILL_TIMEOUT_MS = 5000;
 const PROCESS_WAIT_MS = 1500;
@@ -12,8 +13,8 @@ function killMitmByPidFile() {
   try {
     const mitmPidFile = path.join(
       process.platform === "win32"
-        ? path.join(process.env.APPDATA || "", "9router")
-        : path.join(os.homedir(), ".9router"),
+        ? path.join(process.env.APPDATA || "", "ultrarouter")
+        : path.join(os.homedir(), ".ultrarouter"),
       "mitm",
       ".mitm.pid"
     );
@@ -37,7 +38,7 @@ function killMitmByPidFile() {
   } catch { /* best effort */ }
 }
 
-// Collect PIDs of all 9router-related processes (excluding current)
+// Collect PIDs of all ultrarouter-related processes (excluding current)
 function collectAppPids() {
   const pids = [];
   const platform = process.platform;
@@ -49,8 +50,8 @@ function collectAppPids() {
       const lines = output.split("\n").slice(1).filter(l => l.trim());
       lines.forEach(line => {
         const lower = line.toLowerCase();
-        // Match anything running from 9router install dir or wrapper cli.js
-        const isAppProcess = lower.includes("9router") ||
+        // Match anything running from ultrarouter install dir or wrapper cli.js
+        const isAppProcess = lower.includes("ultrarouter") ||
           lower.includes("next-server") ||
           lower.includes("\\bin\\app\\") ||
           lower.includes("/bin/app/") ||
@@ -77,7 +78,7 @@ function collectAppPids() {
     try {
       const output = execSync("ps aux 2>/dev/null", { encoding: "utf8", timeout: KILL_TIMEOUT_MS });
       output.split("\n").forEach(line => {
-        const isAppProcess = line.includes("9router") ||
+        const isAppProcess = line.includes("ultrarouter") ||
           line.includes("next-server") ||
           line.includes("cloudflared") ||
           line.includes("/bin/app/") ||
@@ -96,14 +97,6 @@ function collectAppPids() {
 }
 
 // Copy updater.js into DATA_DIR so npm -g can overwrite node_modules safely
-function getDataDir() {
-  if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router");
-  }
-  return path.join(os.homedir(), ".9router");
-}
-
 function resolveBundledUpdaterPath() {
   if (process.env.UPDATER_SCRIPT_PATH && fs.existsSync(process.env.UPDATER_SCRIPT_PATH)) {
     return process.env.UPDATER_SCRIPT_PATH;
@@ -156,10 +149,10 @@ export async function killAppProcesses() {
   }
 }
 
-// Resolve npx/9router binary to relaunch after update (cross-platform)
+// Resolve npx/ultrarouter binary to relaunch after update (cross-platform)
 function resolveRelaunchCommand() {
   const isWin = process.platform === "win32";
-  // Prefer `npx 9router` — works regardless of global bin path changes after npm i -g
+  // Prefer `npx ultrarouter` — works regardless of global bin path changes after npm i -g
   const npx = isWin ? "npx.cmd" : "npx";
   return { cmd: npx, args: [UPDATER_CONFIG.npmPackageName] };
 }

@@ -2,7 +2,7 @@
  * agy-gateway — tiny OpenAI-compatible HTTP wrapper around the official
  * Antigravity CLI.
  *
- * One container per account; 9router talks to this server over a loopback-only
+ * One container per account; ultrarouter talks to this server over a loopback-only
  * published port. The wrapper never touches Google directly: it spawns `agy`
  * with the container's cached credentials.
  */
@@ -41,7 +41,7 @@ const MODELS_CACHE_MS = Math.max(10_000, Number(process.env.AGY_MODELS_CACHE_MS)
 const USAGE_CACHE_MS = Math.max(5_000, Number(process.env.AGY_USAGE_CACHE_MS) || 30_000);
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
 const WORKDIR = process.env.AGY_WORKDIR || process.cwd();
-const MCP_SERVER_NAME = process.env.AGY_MCP_NAME || "9router";
+const MCP_SERVER_NAME = process.env.AGY_MCP_NAME || "ultrarouter";
 
 // Per-turn tool bridge state (Phase 4): activeTurn holds the current request's
 // OpenAI tool schemas and any tool the CLI asked us to execute. The client runs
@@ -631,7 +631,7 @@ async function handleChat(req, res, body) {
       let started = false;
       // Do not send headers until there is something to stream. A banned or
       // logged-out account fails the turn before its first token; sending a
-      // 200 + role chunk first would make 9router see an empty stream instead
+      // 200 + role chunk first would make ultrarouter see an empty stream instead
       // of the real 403, so it could not mark the account or fail over.
       const startStream = () => {
         if (started) return;

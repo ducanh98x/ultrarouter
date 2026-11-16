@@ -9,7 +9,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 
-const packageName = process.env.UPDATER_PKG_NAME || "9router";
+const packageName = process.env.UPDATER_PKG_NAME || "ultrarouter";
 const port = parseInt(process.env.UPDATER_PORT || "20129", 10);
 const tailLines = parseInt(process.env.UPDATER_TAIL_LINES || "8", 10);
 const maxRetries = parseInt(process.env.UPDATER_RETRIES || "3", 10);
@@ -21,12 +21,23 @@ const waitCheckMs = parseInt(process.env.UPDATER_WAIT_CHECK_MS || "500", 10);
 const appPort = parseInt(process.env.UPDATER_APP_PORT || "20128", 10);
 
 // Data directory (match mitm/paths.js logic)
+function defaultDataDir(name) {
+  return process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), name)
+    : path.join(os.homedir(), `.${name}`);
+}
 function getDataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router");
+  const target = defaultDataDir("ultrarouter");
+  const legacy = defaultDataDir("9router");
+  if (!fs.existsSync(target) && fs.existsSync(legacy)) {
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      try { fs.renameSync(legacy, target); }
+      catch { fs.cpSync(legacy, target, { recursive: true, force: false, errorOnExist: false }); }
+    } catch { /* best effort */ }
   }
-  return path.join(os.homedir(), ".9router");
+  return target;
 }
 const updateDir = path.join(getDataDir(), "update");
 try { fs.mkdirSync(updateDir, { recursive: true }); } catch { /* best effort */ }

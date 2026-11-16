@@ -20,10 +20,10 @@ vi.mock("../../src/app/api/cli-tools/resolveApiKey.js", () => ({
 const { POST } = await import("../../src/app/api/cli-tools/opencode-settings/route.js");
 
 const post = (body) => POST({ json: async () => body });
-const written = () => JSON.parse(fsMock.store).provider["9router"].models;
+const written = () => JSON.parse(fsMock.store).provider["ultrarouter"].models;
 
 describe("opencode-settings POST effort variants", () => {
-  it("writes variants from the levels 9Router offers for the model", async () => {
+  it("writes variants from the levels UltraRouter offers for the model", async () => {
     fsMock.store = null;
     await post({ baseUrl: "http://localhost:20128", models: ["cc/claude-haiku-5-5"] });
     const levels = getThinkingLevels("claude", "claude-haiku-5-5");
@@ -34,7 +34,7 @@ describe("opencode-settings POST effort variants", () => {
   it("keeps variants the user already customized", async () => {
     const custom = { low: { reasoningEffort: "low" } };
     fsMock.store = JSON.stringify({
-      provider: { "9router": { npm: "@ai-sdk/openai-compatible", options: {}, models: { "cc/claude-haiku-5-5": { name: "x", variants: custom } } } },
+      provider: { "ultrarouter": { npm: "@ai-sdk/openai-compatible", options: {}, models: { "cc/claude-haiku-5-5": { name: "x", variants: custom } } } },
     });
     await post({ baseUrl: "http://localhost:20128", models: ["cc/claude-haiku-5-5"] });
     expect(written()["cc/claude-haiku-5-5"].variants).toEqual(custom);

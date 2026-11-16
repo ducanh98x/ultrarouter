@@ -17,9 +17,20 @@ const SQL_JS_VERSION = "1.14.1";
 
 function getDataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  return process.platform === "win32"
+  const target = process.platform === "win32"
+    ? path.join(process.env.APPDATA || os.homedir(), "ultrarouter")
+    : path.join(os.homedir(), ".ultrarouter");
+  const legacy = process.platform === "win32"
     ? path.join(process.env.APPDATA || os.homedir(), "9router")
     : path.join(os.homedir(), ".9router");
+  if (!fs.existsSync(target) && fs.existsSync(legacy)) {
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      try { fs.renameSync(legacy, target); }
+      catch { fs.cpSync(legacy, target, { recursive: true, force: false, errorOnExist: false }); }
+    } catch { /* best effort */ }
+  }
+  return target;
 }
 
 function getRuntimeDir() {
@@ -38,10 +49,10 @@ function ensureRuntimeDir() {
   const pkgPath = path.join(dir, "package.json");
   if (!fs.existsSync(pkgPath)) {
     fs.writeFileSync(pkgPath, JSON.stringify({
-      name: "9router-runtime",
+      name: "ultrarouter-runtime",
       version: "1.0.0",
       private: true,
-      description: "User-writable runtime deps for 9router (better-sqlite3 native binary)",
+      description: "User-writable runtime deps for ultrarouter (better-sqlite3 native binary)",
     }, null, 2));
   }
   return dir;

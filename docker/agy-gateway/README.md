@@ -1,23 +1,23 @@
 # agy-gateway
 
 Small OpenAI-compatible HTTP server that fronts the official Antigravity CLI
-(`agy`). 9router starts one container per account and talks to it over a
+(`agy`). ultrarouter starts one container per account and talks to it over a
 loopback-only published port.
 
 ```
-9router ──HTTP──> 127.0.0.1:<hostPort> ──> agy-gateway ──> agy ──> Google
+ultrarouter ──HTTP──> 127.0.0.1:<hostPort> ──> agy-gateway ──> agy ──> Google
 ```
 
 ## Why a wrapper
 
 `agy` speaks NDJSON (`--output-format stream-json`) and owns its credentials,
-project and quota. 9router already knows how to forward OpenAI-shaped requests,
+project and quota. ultrarouter already knows how to forward OpenAI-shaped requests,
 track usage, rotate accounts and lock models, so the wrapper only has to:
 
 - turn an OpenAI `messages[]` history into one `agy -p` prompt,
 - turn agy's NDJSON events back into OpenAI SSE chunks,
 - expose `/health`, `/v1/models`, `/v1/usage`,
-- relay the interactive login (`agy acp --login`) to the 9router UI.
+- relay the interactive login (`agy acp --login`) to the ultrarouter UI.
 
 No IDE impersonation is involved: the CLI is the real client.
 
@@ -40,7 +40,7 @@ All routes except `/health` require `Authorization: Bearer $GATEWAY_TOKEN`.
 | Variable | Default | Notes |
 |---|---|---|
 | `PORT` | `8787` | wrapper port inside the container |
-| `GATEWAY_TOKEN` | — | required; also stored as the 9router connection `apiKey` |
+| `GATEWAY_TOKEN` | — | required; also stored as the ultrarouter connection `apiKey` |
 | `AGY_BIN` | `/usr/local/bin/agy` | binary path |
 | `AGY_MODE` | `plan` | `plan`, `accept-edits` or `auto` (plan avoids container edits) |
 | `AGY_PRINT_TIMEOUT_SEC` | `0` | passed to `--print-timeout` |
@@ -71,7 +71,7 @@ and a wrong password made `/health` report `authOk:false` with chat returning
 ## Build
 
 ```bash
-docker build -t 9router/agy-gateway:1.5.9 docker/agy-gateway
+docker build -t ultrarouter/agy-gateway:1.5.9 docker/agy-gateway
 ```
 
 The build fails if the installer produces a different version than
@@ -87,10 +87,10 @@ docker run -d --name agy-01 \
   -v agy-01:/data \
   -e GATEWAY_TOKEN="$(openssl rand -base64 32)" \
   --restart unless-stopped \
-  9router/agy-gateway:1.5.9
+  ultrarouter/agy-gateway:1.5.9
 ```
 
-Then log in through 9router (or `curl -X POST localhost:20801/auth/start` with
+Then log in through UltraRouter (or `curl -X POST localhost:20801/auth/start` with
 the token). The login volume keeps the OAuth session across restarts.
 
 ## Notes and limits
@@ -105,7 +105,7 @@ the token). The login volume keeps the OAuth session across restarts.
   container is created with `--cap-drop ALL`, read-only rootfs and a `/tmp`
   tmpfs (see `src/lib/docker/agyContainers.js`).
 - **Tool calling is bridged via MCP.** The wrapper registers
-  `agy mcp add -H "Authorization: Bearer …" 9router http://127.0.0.1:8787/v1/mcp`,
+  `agy mcp add -H "Authorization: Bearer …" ultrarouter http://127.0.0.1:8787/v1/mcp`,
   exposes the request's OpenAI tools, and turns an agy MCP call into OpenAI
   `tool_calls`. The next request seeds the client's tool result so agy can
   continue. When a request carries tools the CLI runs with
@@ -124,10 +124,10 @@ npm --prefix tests test -- unit/antigravity-cli-executor.test.js \
   unit/agy-docker-containers.test.js unit/agy-gateway-lib.test.js
 
 # build + run
-docker build -t 9router/agy-gateway:1.5.9 docker/agy-gateway
+docker build -t ultrarouter/agy-gateway:1.5.9 docker/agy-gateway
 docker run -d --name agy-test -p 127.0.0.1:20801:8787 \
   -v agy-test:/data -e GATEWAY_TOKEN=test-token --restart unless-stopped \
-  9router/agy-gateway:1.5.9
+  ultrarouter/agy-gateway:1.5.9
 
 curl -s localhost:20801/health
 curl -s -X POST localhost:20801/v1/chat/completions \

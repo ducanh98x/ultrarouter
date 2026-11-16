@@ -15,14 +15,24 @@ const DEFAULT_CONFIG = {
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
-const APP_NAME = "9router";
+const APP_NAME = "ultrarouter";
 
 function getDataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), APP_NAME);
+  const target = process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), APP_NAME)
+    : path.join(os.homedir(), `.${APP_NAME}`);
+  const legacy = process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router")
+    : path.join(os.homedir(), ".9router");
+  if (!fs.existsSync(target) && fs.existsSync(legacy)) {
+    try {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      try { fs.renameSync(legacy, target); }
+      catch { fs.cpSync(legacy, target, { recursive: true, force: false, errorOnExist: false }); }
+    } catch { /* best effort */ }
   }
-  return path.join(os.homedir(), `.${APP_NAME}`);
+  return target;
 }
 
 const MACHINE_ID_FILE = path.join(getDataDir(), "machine-id");
@@ -365,7 +375,7 @@ async function deleteCombo(id) {
  * Get CLI tool settings
  * @param {string} tool - Tool name: claude | codex | droid | openclaw
  * @param {string} [profile] - Hermes profile name (defaults to the default profile)
- * @returns {Promise<Object>} { success, data: { installed, has9Router, ... } }
+ * @returns {Promise<Object>} { success, data: { installed, hasUltraRouter, ... } }
  */
 async function getCliToolSettings(tool, profile) {
   const qs = profile ? `?profile=${encodeURIComponent(profile)}` : "";

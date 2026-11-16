@@ -46,10 +46,13 @@ const readSettings = async () => {
   }
 };
 
-// Check if settings has 9Router customModels
-const has9RouterConfig = (settings) => {
+const isUltraRouterModel = (m) =>
+  m?.id?.startsWith("custom:UltraRouter") || m?.id?.startsWith("custom:9Router");
+
+// Check if settings has UltraRouter customModels
+const hasUltraRouterConfig = (settings) => {
   if (!settings || !settings.customModels) return false;
-  return settings.customModels.some(m => m.id?.startsWith("custom:9Router"));
+  return settings.customModels.some(isUltraRouterModel);
 };
 
 // GET - Check droid CLI and read current settings
@@ -70,7 +73,7 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       settings,
-      has9Router: has9RouterConfig(settings),
+      hasUltraRouter: hasUltraRouterConfig(settings),
       settingsPath: getDroidSettingsPath(),
     });
   } catch (error) {
@@ -79,7 +82,7 @@ export async function GET() {
   }
 }
 
-// POST - Update 9Router customModels (merge with existing settings)
+// POST - Update UltraRouter customModels (merge with existing settings)
 // Accepts either `model` (string, legacy single-model) or `models` (array of strings, multi-model)
 // Also accepts `activeModel` to set which model is active/primary
 export async function POST(request) {
@@ -111,8 +114,8 @@ export async function POST(request) {
       settings.customModels = [];
     }
 
-    // Remove all existing 9Router configs
-    settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:9Router"));
+    // Remove all existing UltraRouter configs
+    settings.customModels = settings.customModels.filter(m => !isUltraRouterModel(m));
 
     // Normalize baseUrl to ensure /v1 suffix
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -137,7 +140,7 @@ export async function POST(request) {
       if (!m || typeof m !== "string") continue;
       settings.customModels.push({
         model: m,
-        id: `custom:9Router-${i}`,
+        id: `custom:UltraRouter-${i}`,
         index: i,
         baseUrl: normalizedBaseUrl,
         apiKey: keyToUse,
@@ -171,7 +174,7 @@ export async function POST(request) {
   }
 }
 
-// DELETE - Remove 9Router customModels only (keep other settings)
+// DELETE - Remove UltraRouter customModels only (keep other settings)
 export async function DELETE() {
   try {
     const settingsPath = getDroidSettingsPath();
@@ -191,9 +194,9 @@ export async function DELETE() {
       throw error;
     }
 
-    // Remove 9Router customModels
+    // Remove UltraRouter customModels
     if (settings.customModels) {
-      settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:9Router"));
+      settings.customModels = settings.customModels.filter(m => !isUltraRouterModel(m));
       
       // Remove customModels array if empty
       if (settings.customModels.length === 0) {
@@ -206,7 +209,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       success: true,
-      message: "9Router settings removed successfully",
+      message: "UltraRouter settings removed successfully",
     });
   } catch (error) {
     console.log("Error resetting droid settings:", error);

@@ -10,7 +10,8 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
-const PROVIDER_ID = "9router";
+const PROVIDER_ID = "ultrarouter";
+const LEGACY_PROVIDER_ID = "9router";
 const getOmpDir = () => path.join(os.homedir(), ".omp", "agent");
 const getOmpDbPath = () => path.join(getOmpDir(), "agent.db");
 const getOmpModelsYmlPath = () => path.join(getOmpDir(), "models.yml");
@@ -44,12 +45,12 @@ const readModelsYml = async () => {
   }
 };
 
-const has9RouterInYml = (content) => {
+const hasUltraRouterInYml = (content) => {
   if (!content) return false;
-  return content.includes("9router:") || content.includes("localhost:20128");
+  return content.includes("ultrarouter:") || content.includes("9router:") || content.includes("localhost:20128");
 };
 
-// Build standard 9Router provider block for models.yml
+// Build standard UltraRouter provider block for models.yml
 const buildOmpProviderYaml = (baseUrl, apiKey) => {
   const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
   const key = apiKey || "";
@@ -75,11 +76,11 @@ export async function GET() {
     }
 
     const ymlContent = await readModelsYml();
-    const has9Router = has9RouterInYml(ymlContent);
+    const hasUltraRouter = hasUltraRouterInYml(ymlContent);
 
     return NextResponse.json({
       installed: true,
-      has9Router,
+      hasUltraRouter,
       configPath: getOmpModelsYmlPath(),
     });
   } catch (err) {
@@ -108,8 +109,8 @@ export async function POST(request) {
     let ymlContent = await readModelsYml();
     const providerBlock = buildOmpProviderYaml(baseUrl, resolvedKey);
 
-    // Remove existing 9router provider if present
-    const regex = new RegExp(`\\s*${PROVIDER_ID}:[\\s\\S]*?(?=\\n\\s*\\w+:|$)`, "g");
+    // Remove existing UltraRouter and legacy 9router providers if present
+    const regex = new RegExp(`\\s*(?:${PROVIDER_ID}|${LEGACY_PROVIDER_ID}):[\\s\\S]*?(?=\\n\\s*\\w+:|$)`, "g");
     ymlContent = ymlContent.replace(regex, "");
 
     if (!ymlContent.trim()) {
@@ -135,6 +136,7 @@ export async function POST(request) {
         const dbPath = getOmpDbPath();
         const db = new Database(dbPath);
         db.prepare("DELETE FROM auth_credentials WHERE provider = ?").run(PROVIDER_ID);
+        db.prepare("DELETE FROM auth_credentials WHERE provider = ?").run(LEGACY_PROVIDER_ID);
         db.prepare(
           "INSERT INTO auth_credentials (provider, credential_type, data, disabled_cause, identity_key, created_at, updated_at) VALUES (?, ?, ?, NULL, NULL, ?, ?)"
         ).run(
@@ -152,7 +154,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: "Oh My Pi settings applied! Run 'omp' and all 9Router models appear under 9router in /model.",
+      message: "Oh My Pi settings applied! Run 'omp' and all UltraRouter models appear under the ultrarouter provider in /model.",
       configPath: getOmpModelsYmlPath(),
     });
   } catch (err) {
@@ -163,7 +165,7 @@ export async function POST(request) {
 export async function DELETE() {
   try {
     let ymlContent = await readModelsYml();
-    const regex = new RegExp(`\\s*${PROVIDER_ID}:[\\s\\S]*?(?=\\n\\s*\\w+:|$)`, "g");
+    const regex = new RegExp(`\\s*(?:${PROVIDER_ID}|${LEGACY_PROVIDER_ID}):[\\s\\S]*?(?=\\n\\s*\\w+:|$)`, "g");
     ymlContent = ymlContent.replace(regex, "");
 
     if (ymlContent.trim() === "providers:") {
@@ -174,7 +176,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       success: true,
-      message: "9Router removed from Oh My Pi",
+      message: "UltraRouter removed from Oh My Pi",
     });
   } catch (err) {
     return NextResponse.json({ error: { message: err.message } }, { status: 500 });

@@ -25,7 +25,7 @@ export default {
     textIcon: "AGY",
     website: "https://antigravity.google/docs/cli/reference",
     notice: {
-      text: "Runs the official Antigravity CLI (`agy`) in a Docker container, one container per account. 9router only relays OpenAI-compatible requests to the container, so no IDE impersonation is involved. Requires Docker on the host.",
+      text: "Runs the official Antigravity CLI (`agy`) in a Docker container, one container per account. ultrarouter only relays OpenAI-compatible requests to the container, so no IDE impersonation is involved. Requires Docker on the host.",
       signupUrl: "https://antigravity.google",
     },
   },
