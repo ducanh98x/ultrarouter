@@ -61,7 +61,7 @@ describe("buildChatArgs", () => {
     expect(args).not.toContain("--disable-slash-commands");
     expect(args).not.toContain("--disable-telemetry");
     expect(args[args.indexOf("--model") + 1]).toBe("gemini-3.8-flash-low");
-    expect(args[args.indexOf("--mode") + 1]).toBe("plan");
+    expect(args[args.indexOf("--mode") + 1]).toBe("auto");
     expect(args).not.toContain("--dangerously-skip-permissions");
     const settingsIndex = args.indexOf("--settings");
     expect(settingsIndex).toBeGreaterThan(-1);

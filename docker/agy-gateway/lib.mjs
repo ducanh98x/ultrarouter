@@ -5,7 +5,7 @@
 export const DEFAULT_PREAMBLE =
   "Reply directly with only the answer. Do not greet or acknowledge this instruction.";
 
-export const DEFAULT_MODE = "plan";
+export const DEFAULT_MODE = "auto";
 
 export function contentToText(content) {
   if (typeof content === "string") return content;
@@ -73,13 +73,69 @@ export const AGY_PERMISSION_SETTINGS = Object.freeze({
   permissions: {
     allow: [`mcp(${MCP_SERVER_NAME}/*)`],
     deny: [
+      // Shell
       "command(*)",
       "unsandboxed(*)",
+      "run_command(*)",
+      "command_status(*)",
+      "send_command_input(*)",
+      // Files
       "read_file(*)",
       "write_file(*)",
+      "view_file(*)",
+      "write_to_file(*)",
+      "replace_file_content(*)",
+      "multi_replace_file_content(*)",
+      "sed_file(*)",
+      "list_dir(*)",
+      "find_by_name(*)",
+      "grep_search(*)",
+      "notebook_edit(*)",
+      "notebook_execution(*)",
+      // Web / browser
       "read_url(*)",
       "execute_url(*)",
       "download_url(*)",
+      "read_url_content(*)",
+      "search_web(*)",
+      "read_resource(*)",
+      "list_resources(*)",
+      "open_browser_url(*)",
+      "read_browser_page(*)",
+      "list_browser_pages(*)",
+      "browser_click_element(*)",
+      "browser_drag_pixel_to_pixel(*)",
+      "browser_get_dom(*)",
+      "browser_get_network_request(*)",
+      "browser_input(*)",
+      "browser_list_network_requests(*)",
+      "browser_mouse_down(*)",
+      "browser_mouse_up(*)",
+      "browser_move_mouse(*)",
+      "browser_press_key(*)",
+      "browser_refresh_page(*)",
+      "browser_resize_window(*)",
+      "browser_scroll(*)",
+      "browser_scroll_dom(*)",
+      "browser_select_option(*)",
+      "browser_subagent(*)",
+      "capture_browser_console_logs(*)",
+      "capture_browser_screenshot(*)",
+      "click_browser_pixel(*)",
+      "execute_browser_javascript(*)",
+      // Agents / side effects
+      "define_subagent(*)",
+      "invoke_subagent(*)",
+      "manage_subagents(*)",
+      "manage_task(*)",
+      "manage_inbox(*)",
+      "delete_knowledge(*)",
+      "run_workflow(*)",
+      "schedule(*)",
+      "search_marketplace(*)",
+      "list_plugin_accounts(*)",
+      "send_message(*)",
+      "generate_image(*)",
     ],
   },
 });

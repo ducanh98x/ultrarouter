@@ -24,7 +24,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     AGY_BIN=/usr/local/bin/agy \
     AGY_WORKDIR=/data/work \
-    AGY_MODE=plan \
+    AGY_MODE=auto \
     PORT=8787
 
 # Linux agy keeps its OAuth session in a file

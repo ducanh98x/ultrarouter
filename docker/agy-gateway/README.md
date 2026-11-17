@@ -42,7 +42,7 @@ All routes except `/health` require `Authorization: Bearer $GATEWAY_TOKEN`.
 | `PORT` | `8787` | wrapper port inside the container |
 | `GATEWAY_TOKEN` | — | required; also stored as the ultrarouter connection `apiKey` |
 | `AGY_BIN` | `/usr/local/bin/agy` | binary path |
-| `AGY_MODE` | `plan` | `plan`, `accept-edits` or `auto` (plan avoids container edits) |
+| `AGY_MODE` | `auto` | `auto`, `accept-edits` or `plan`; `plan` is mapped to `auto` because it would describe work instead of executing it |
 | `AGY_PRINT_TIMEOUT_SEC` | `0` | passed to `--print-timeout` |
 | `AGY_TURN_TIMEOUT_MS` | `600000` | hard kill for one turn |
 | `AGY_MODELS_CACHE_MS` | `600000` | model list cache |
@@ -109,8 +109,10 @@ the token). The login volume keeps the OAuth session across restarts.
   exposes the request's OpenAI tools, and turns an agy MCP call into OpenAI
   `tool_calls`. The next request seeds the client's tool result so agy can
   continue. When a request carries tools the CLI runs with
-  `--dangerously-skip-permissions` (print mode otherwise soft-denies tool
-  confirmations); `--mode plan` still blocks file edits and commands.
+  `--dangerously-skip-permissions`; built-in shell/file/web/browser tools are
+  denied by `--settings`, and only `mcp(ultrarouter/*)` is allowed. The default
+  mode is `auto` so client tools actually execute (a legacy `plan` value is
+  mapped to `auto`).
 - **No prompt cache.** Measured `cache_read_tokens: 0`; every turn pays the
   full ~6.8k input tokens.
 - Keep the image lean (no extra plugins/skills): context size and latency grow

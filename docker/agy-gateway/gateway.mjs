@@ -34,7 +34,10 @@ const PORT = Number(process.env.PORT) || 8787;
 const TOKEN = process.env.GATEWAY_TOKEN || "";
 const ALLOW_NO_AUTH = process.env.GATEWAY_ALLOW_NO_AUTH === "1";
 const AGY_BIN = process.env.AGY_BIN || "agy";
-const AGY_MODE = process.env.AGY_MODE || "plan";
+const requestedMode = process.env.AGY_MODE || "auto";
+// Older images set AGY_MODE=plan, which makes the CLI describe work instead of
+// executing it. Treat that value as auto so an in-place update starts working.
+const AGY_MODE = requestedMode === "plan" ? "auto" : requestedMode;
 const PRINT_TIMEOUT_SEC = Math.max(0, Number(process.env.AGY_PRINT_TIMEOUT_SEC) || 0);
 const TURN_TIMEOUT_MS = Math.max(30_000, Number(process.env.AGY_TURN_TIMEOUT_MS) || 600_000);
 const LOGIN_TIMEOUT_MS = Math.max(60_000, Number(process.env.AGY_LOGIN_TIMEOUT_MS) || 20 * 60_000);
