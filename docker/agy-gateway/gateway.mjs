@@ -19,6 +19,7 @@ import {
   buildUsageArgs,
   contentToText,
   mapAgyError,
+  normalizeToolArguments,
   openAiChunk,
   openAiErrorBody,
   parseModelList,
@@ -378,9 +379,14 @@ function handleMcpRequest(res, message) {
 
     if (activeTurn) {
       const callId = `call_${crypto.randomUUID()}`;
-      activeTurn.toolCalls.push({ id: callId, name, arguments: params?.arguments || {} });
+      const toolDef = (activeTurn.tools || []).find((tool) => {
+        const toolName = tool?.function?.name || tool?.name;
+        return toolName === name;
+      });
+      const args = normalizeToolArguments(toolDef, params?.arguments || {});
+      activeTurn.toolCalls.push({ id: callId, name, arguments: args });
       toolCallNames.set(callId, name);
-      log("info", "tool call requested by CLI", { name: rawName, resolved: name });
+      log("info", "tool call requested by CLI", { name: rawName, resolved: name, arguments: JSON.stringify(args).slice(0, 500) });
       // Stop the turn: the client must execute the tool before the model can
       // continue. 50ms lets the MCP response flush first.
       setTimeout(() => {

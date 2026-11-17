@@ -290,6 +290,49 @@ export function openAiErrorBody(mapped) {
   };
 }
 
+/**
+ * The CLI occasionally calls an array parameter by its singular/loose name
+ * (`query` instead of `queries`, `tool_name` instead of `names`). Clients then
+ * reject the call before the model can see the validation error. Repair the
+ * common shapes from the tool schema so the client receives the contract it
+ * declared.
+ */
+export function normalizeToolArguments(toolDef, args = {}) {
+  const fn = toolDef?.function || toolDef;
+  const properties = fn?.parameters?.properties;
+  if (!properties || !args || typeof args !== "object" || Array.isArray(args)) return args;
+  const next = { ...args };
+
+  for (const [key, def] of Object.entries(properties)) {
+    if (def?.type !== "array" || def?.items?.type !== "string") continue;
+
+    if (next[key] === undefined) {
+      const singular = key.endsWith("s") ? key.slice(0, -1) : key;
+      const candidates = [
+        singular,
+        `${singular}_name`,
+        key === "names" ? "tool_name" : null,
+        key === "queries" ? "search_query" : null,
+        "name",
+        "query",
+        "q",
+      ].filter(Boolean);
+
+      for (const candidate of candidates) {
+        if (next[candidate] === undefined) continue;
+        const value = next[candidate];
+        next[key] = Array.isArray(value) ? value : [value];
+        delete next[candidate];
+        break;
+      }
+    } else if (typeof next[key] === "string") {
+      next[key] = [next[key]];
+    }
+  }
+
+  return next;
+}
+
 export function openAiChunk({ id, model, delta = {}, finishReason = null }) {
   return {
     id,

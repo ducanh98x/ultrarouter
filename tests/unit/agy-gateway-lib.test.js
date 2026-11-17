@@ -5,6 +5,7 @@ import {
   buildPrompt,
   buildUsageArgs,
   mapAgyError,
+  normalizeToolArguments,
   openAiChunk,
   parseModelList,
   parseUsageEnvelope,
@@ -210,5 +211,57 @@ describe("mapAgyError", () => {
       result: null,
     });
     expect(mapped.message).toBe("agy failed without an error message");
+  });
+});
+
+describe("normalizeToolArguments", () => {
+  const searchTool = {
+    function: {
+      name: "tool_search",
+      parameters: {
+        type: "object",
+        properties: { queries: { type: "array", items: { type: "string" } } },
+        required: ["queries"],
+      },
+    },
+  };
+  const describeTool = {
+    function: {
+      name: "tool_describe",
+      parameters: {
+        type: "object",
+        properties: { names: { type: "array", items: { type: "string" } } },
+        required: ["names"],
+      },
+    },
+  };
+
+  it("turns a singular query into the declared queries array", () => {
+    expect(normalizeToolArguments(searchTool, { query: "terminal" })).toEqual({
+      queries: ["terminal"],
+    });
+  });
+
+  it("turns tool_name into the declared names array", () => {
+    expect(normalizeToolArguments(describeTool, { tool_name: "terminal" })).toEqual({
+      names: ["terminal"],
+    });
+  });
+
+  it("wraps a bare string for an array-of-string parameter", () => {
+    expect(normalizeToolArguments(searchTool, { queries: "terminal" })).toEqual({
+      queries: ["terminal"],
+    });
+  });
+
+  it("leaves array-of-object parameters alone", () => {
+    const tool = {
+      function: {
+        name: "tool_call",
+        parameters: { type: "object", properties: { calls: { type: "array", items: { type: "object" } } } },
+      },
+    };
+    const args = { calls: [{ name: "terminal", arguments: {} }] };
+    expect(normalizeToolArguments(tool, args)).toEqual(args);
   });
 });
